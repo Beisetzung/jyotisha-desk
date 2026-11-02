@@ -1,0 +1,18 @@
+import { setup } from './common.mjs';
+import * as swe from '../src/swe.js';
+import * as E from '../src/eclipse.js';
+import * as A from '../src/astro.js';
+await setup();
+const jd0 = swe.julday(1869, 10, 2, 0), jd1 = jd0 + 100 * 365.25;
+const t = (n, f) => { const s = Date.now(); const r = f(); console.log(n.padEnd(40), Date.now() - s, 'ms'); return r; };
+let n = 0;
+t('sol global only', () => { let x = jd0; for (let i = 0; i < 300; i++) { const r = swe.solEclipseGlobal(x); if (!(r.t[0] > 0) || r.t[0] > jd1) break; x = r.t[0] + 20; n++; } });
+console.log(' n', n);
+t('lun global only', () => { let x = jd0; let m = 0; for (let i = 0; i < 300; i++) { const r = swe.lunEclipseGlobal(x); if (!(r.t[0] > 0) || r.t[0] > jd1) break; x = r.t[0] + 20; m++; } console.log(' m', m); });
+t('list no natal, no loc', () => E.listEclipses(jd0, jd1, { limit: 600 }));
+t('list natal, no loc', () => E.listEclipses(jd0, jd1, { natal: null, limit: 600 }));
+t('list + loc', () => E.listEclipses(jd0, jd1, { loc: { lon: 69.8, lat: 21.6, alt: 0 }, limit: 600 }));
+const st = A.DEFAULT_SETTINGS;
+t('1000 calc sun', () => { for (let i = 0; i < 1000; i++) swe.calc(jd0 + i, swe.P.SUN, true, 1); });
+t('1000 planetState Jup', () => { for (let i = 0; i < 1000; i++) A.planetState(jd0 + i, 4, st); });
+t('1000 node', () => { for (let i = 0; i < 1000; i++) swe.calcNode(jd0 + i, false, true, 1, false); });

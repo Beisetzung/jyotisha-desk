@@ -1,0 +1,20 @@
+import { setup, readJhd } from './common.mjs';
+import { parseJHD } from '../src/jhd.js';
+import * as A from '../src/astro.js';
+import { listEclipses } from '../src/eclipse.js';
+import * as T from '../src/tables.js';
+const swe = await setup();
+let fails = 0; const ck = (c, m) => { if (!c) { fails++; console.log('FAIL:', m); } else console.log('ok  ', m); };
+const natal = A.computeChart(parseJHD(readJhd('Mahatma Gandhi.jhd'), 'g'));
+const loc = { lon: 37.6, lat: 55.75, alt: 150 };
+const list = listEclipses(swe.julday(2026, 1, 1, 0), swe.julday(2028, 1, 1, 0), { natal, loc });
+const f = (jd) => { const r = swe.revjul(jd); return `${r.y}-${String(r.m).padStart(2,'0')}-${String(r.d).padStart(2,'0')} ${String(Math.floor(r.h)).padStart(2,'0')}:${String(Math.floor((r.h%1)*60)).padStart(2,'0')}`; };
+for (const e of list) console.log(e.kind, f(e.jd), e.typeRu.padEnd(14), 'mag', e.magnitude.toFixed(2), T.SIGN_ABBR[e.sign], e.deg.toFixed(1), T.NAKSHATRAS[e.nak], 'node', T.PLANET_ABBR[e.node.id], e.node.dist.toFixed(1), 'H', e.fromLagna, 'M', e.fromMoon, 'hits', e.hits.map((h) => h.name + ':' + h.orb.toFixed(1)).join(','), '| local', e.local.visible ? (e.kind === 'sol' ? 'mag ' + e.local.magnitude.toFixed(2) : 'alt ' + e.local.moonAlt.toFixed(0)) : 'no');
+const exp = ['2026-02-17','2026-03-03','2026-08-12','2026-08-28','2027-02-06','2027-02-20','2027-07-18','2027-08-02','2027-08-17'];
+const got = list.map((e) => f(e.jd).slice(0, 10));
+// lunar 2027-07-18 (penumbral) and 2027-08-17 (penumbral) exist; accept a superset check
+ck(['2026-02-17','2026-03-03','2026-08-12','2026-08-28','2027-02-06','2027-02-20','2027-08-02'].every((d) => got.includes(d)), 'known eclipses 2026-27 all found: ' + got.join(' '));
+ck(list.find((e) => f(e.jd).startsWith('2026-08-12')).typeRu === 'полное', '2026-08-12 total solar');
+ck(list.find((e) => f(e.jd).startsWith('2027-02-06')).typeRu === 'кольцеобразное', '2027-02-06 annular');
+ck(list.every((e) => e.node.dist < 20), 'every eclipse within 20 deg of a node');
+console.log(fails ? fails + ' FAILED' : 'ALL OK');
