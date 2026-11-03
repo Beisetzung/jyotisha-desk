@@ -248,6 +248,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
 .form .hint.err, .prog .err, #itxt.err { color: var(--bad, #b3261e); }
 .form details.more ol { padding-left: 1.2rem; margin: .3rem 0; } .form details.more li { margin: .3rem 0; color: var(--text); }
 .prog { margin: .8rem 0; display: flex; flex-direction: column; gap: .35rem; }
+.prog[hidden] { display: none; }
 .prog .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; padding: 0; }
 .prog .bar i { display: block; height: 100%; width: 0; background: var(--saffron); transition: width .2s; }
 .prog span { color: var(--mut); font-size: .88rem; }
@@ -260,6 +261,11 @@ details.more[open] > summary { margin-bottom: .5rem; }
 .modes button + button { border-left: 1px solid #323c5c; }
 .modes button.on { background: var(--saffron); color: #1a1405; }
 .modes button:not(.on):hover { color: var(--side-text); }
+.bkind { display: flex; border: 1px solid #323c5c; border-radius: 6px; overflow: hidden; }
+.bkind button { flex: 1; background: transparent; color: var(--side-mut); border: 0; padding: .3rem .5rem; cursor: pointer; font-size: .85rem; }
+.bkind button + button { border-left: 1px solid #323c5c; }
+.bkind button.on { background: #2c3757; color: var(--side-text); font-weight: 600; }
+.bkind button:not(.on):hover { color: var(--side-text); }
 .row .nb { position: absolute; right: .9rem; top: .35rem; color: var(--saffron); font-size: .78rem; }
 
 #main.pdfmode > #top, #main.pdfmode > #tabs, #main.pdfmode > #view { display: none; }
@@ -2481,6 +2487,11 @@ details.more[open] > summary { margin-bottom: .5rem; }
   // src/app/github.js
   var API = "https://api.github.com";
   var CKEY = "jhora-web-base-v1";
+  var NOTES_SUFFIX = ".notes.json";
+  var MAX_UPLOAD = 50 * 1024 * 1024;
+  var REPO_WARN = 900 * 1024 * 1024;
+  var BIG_CAP = 400 * 1024 * 1024;
+  var SMALL = 1024 * 1024;
   var GhError = class extends Error {
     constructor(kind, status, message, extra = {}) {
       super(message);
@@ -2496,8 +2507,8 @@ details.more[open] > summary { margin-bottom: .5rem; }
       c = JSON.parse(localStorage.getItem(CKEY) || "null");
     } catch {
     }
-    if (!c || typeof c !== "object") return memToken ? { owner: "", repo: "", branch: "", folder: "charts", remember: false, token: memToken } : null;
-    return { owner: c.owner || "", repo: c.repo || "", branch: c.branch || "", folder: typeof c.folder === "string" ? c.folder : "charts", remember: c.remember !== false, token: c.token || memToken };
+    if (!c || typeof c !== "object") return memToken ? { owner: "", repo: "", branch: "", folder: "charts", pdfFolder: "pdf", remember: false, token: memToken } : null;
+    return { owner: c.owner || "", repo: c.repo || "", branch: c.branch || "", folder: typeof c.folder === "string" ? c.folder : "charts", pdfFolder: typeof c.pdfFolder === "string" ? c.pdfFolder : "pdf", remember: c.remember !== false, token: c.token || memToken };
   }
   function saveConfig(cfg) {
     memToken = cfg.token || "";
@@ -2526,9 +2537,13 @@ details.more[open] > summary { margin-bottom: .5rem; }
     return parts.join("/");
   }
   var cache = { get: async () => null, set: async () => {
+  }, del: async () => {
   } };
-  function setCache(get, set) {
-    cache = { get, set };
+  var bigCap = BIG_CAP;
+  function setCache(get, set, del, cap) {
+    cache = { get, set, del: del || (async () => {
+    }) };
+    bigCap = cap || BIG_CAP;
   }
   var sleep = (ms, signal) => new Promise((res, rej) => {
     const t = setTimeout(res, ms);
@@ -2545,6 +2560,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
     if (status === 403) return new GhError("forbidden", status, "\u041D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u0430: \u0443 \u0442\u043E\u043A\u0435\u043D\u0430 \u043D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u043F\u0440\u0430\u0432. \u0414\u043B\u044F \u0431\u0430\u0437\u044B \u043D\u0443\u0436\u0435\u043D \u0434\u043E\u0441\u0442\u0443\u043F \u043A \u044D\u0442\u043E\u043C\u0443 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044E \u0441 \u043F\u0440\u0430\u0432\u043E\u043C \xABContents: Read and write\xBB." + tail);
     if (status === 404) return new GhError("notfound", status, "\u0420\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439, \u0432\u0435\u0442\u043A\u0430 \u0438\u043B\u0438 \u0444\u0430\u0439\u043B \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u044B. \u0414\u043B\u044F \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u0433\u043E \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F GitHub \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442 \u0442\u0430\u043A \u0436\u0435, \u0435\u0441\u043B\u0438 \u0442\u043E\u043A\u0435\u043D \u043D\u0435 \u0438\u043C\u0435\u0435\u0442 \u043A \u043D\u0435\u043C\u0443 \u0434\u043E\u0441\u0442\u0443\u043F\u0430." + tail);
     if (status === 409) return /empty/i.test(msg) ? new GhError("empty", status, "\u0420\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u043F\u0443\u0441\u0442.") : new GhError("conflict", status, "\u041A\u043E\u043D\u0444\u043B\u0438\u043A\u0442: \u0444\u0430\u0439\u043B \u0432 \u0431\u0430\u0437\u0435 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0441\u044F (\u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E, \u043D\u0430 \u0434\u0440\u0443\u0433\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435) \u0438\u043B\u0438 \u0438\u0434\u0451\u0442 \u0434\u0440\u0443\u0433\u0430\u044F \u0437\u0430\u043F\u0438\u0441\u044C. \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u0441\u043F\u0438\u0441\u043E\u043A \u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435." + tail);
+    if (status === 413) return new GhError("toolarge", status, "GitHub \u043D\u0435 \u043F\u0440\u0438\u043D\u044F\u043B \u0444\u0430\u0439\u043B: \u043E\u043D \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u043E\u0439 \u0434\u043B\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0447\u0435\u0440\u0435\u0437 \u0441\u0430\u0439\u0442." + tail);
     if (status === 422) return new GhError("invalid", status, "GitHub \u043E\u0442\u043A\u043B\u043E\u043D\u0438\u043B \u0437\u0430\u043F\u0440\u043E\u0441: \u0444\u0430\u0439\u043B \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0441\u044F \u0432 \u0431\u0430\u0437\u0435, \u043B\u0438\u0431\u043E \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u043C\u043D\u043E\u0433\u043E \u0437\u0430\u043F\u0440\u043E\u0441\u043E\u0432 \u043F\u043E\u0434\u0440\u044F\u0434." + tail);
     if (status >= 500) return new GhError("server", status, "GitHub \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D, \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435 \u043F\u043E\u0437\u0436\u0435." + tail);
     return new GhError("http", status, `\u041E\u0448\u0438\u0431\u043A\u0430 GitHub ${status}.` + tail);
@@ -2632,6 +2648,112 @@ details.more[open] > summary { margin-bottom: .5rem; }
     }
     return bytes;
   }
+  async function listPdfs(cfg, o) {
+    let res;
+    try {
+      res = await request(cfg, "GET", `${rp(cfg)}/git/trees/${encodeURIComponent(cfg.branch)}?recursive=1`, o);
+    } catch (e2) {
+      if (e2.kind === "empty") return { entries: [], truncated: false, empty: true, files: /* @__PURE__ */ new Map(), repoBytes: 0 };
+      throw e2;
+    }
+    const j = await res.json(), folder = cfg.pdfFolder || "", prefix = folder ? folder + "/" : "";
+    const pdfs = [], side = /* @__PURE__ */ new Map(), files = /* @__PURE__ */ new Map();
+    let repoBytes = 0;
+    for (const t of j.tree || []) {
+      if (t.type !== "blob") continue;
+      repoBytes += t.size || 0;
+      if (!t.path.startsWith(prefix)) continue;
+      const rel = t.path.slice(prefix.length);
+      if (/\.pdf$/i.test(rel)) pdfs.push({ t, rel });
+      else if (/\.pdf\.notes\.json$/i.test(rel)) side.set(rel.slice(0, rel.length - NOTES_SUFFIX.length), t);
+      else continue;
+      files.set(rel, { sha: t.sha, size: t.size || 0 });
+    }
+    const entries = pdfs.map(({ t, rel }) => {
+      const name = rel.slice(rel.lastIndexOf("/") + 1), sc = side.get(rel) || null;
+      return {
+        name,
+        path: rel,
+        dirPath: rel.slice(0, rel.length - name.length),
+        size: t.size || 0,
+        mtime: null,
+        hasNotes: !!sc,
+        remote: { path: t.path, sha: t.sha, size: t.size || 0 },
+        sidecar: sc ? { path: sc.path, sha: sc.sha, size: sc.size || 0 } : null
+      };
+    });
+    return { entries, truncated: !!j.truncated, empty: false, files, repoBytes };
+  }
+  var bigQ = Promise.resolve();
+  function bigTouch(key, size) {
+    bigQ = bigQ.then(async () => {
+      let idx = [];
+      try {
+        const x = await cache.get("big:index");
+        if (Array.isArray(x)) idx = x;
+      } catch {
+      }
+      idx = idx.filter((i) => i.k !== key);
+      idx.push({ k: key, size, t: Date.now() });
+      idx.sort((a, b) => a.t - b.t);
+      let sum = idx.reduce((a, i) => a + i.size, 0);
+      while (sum > bigCap && idx.length > 1 && idx[0].k !== key) {
+        const old = idx.shift();
+        sum -= old.size;
+        try {
+          await cache.del(old.k);
+        } catch {
+        }
+      }
+      try {
+        await cache.set("big:index", idx);
+      } catch {
+      }
+    }).catch(() => {
+    });
+    return bigQ;
+  }
+  async function readBlobRaw(cfg, sha, { size = 0, onProgress, onWait, signal } = {}) {
+    const key = "big:" + sha;
+    let hit = null;
+    try {
+      hit = await cache.get(key);
+    } catch {
+    }
+    if (hit) {
+      bigTouch(key, hit.byteLength);
+      if (onProgress) onProgress(hit.byteLength, hit.byteLength);
+      return new Uint8Array(hit);
+    }
+    const res = await request(cfg, "GET", `${rp(cfg)}/git/blobs/${encodeURIComponent(sha)}`, { accept: "application/vnd.github.raw+json", onWait, signal });
+    let bytes;
+    if (/json/i.test(res.headers.get("content-type") || "")) bytes = b64ToBytes((await res.json()).content || "");
+    else if (res.body && res.body.getReader) {
+      const total = size || +res.headers.get("content-length") || 0, rd = res.body.getReader(), parts = [];
+      let got = 0;
+      for (; ; ) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value);
+        got += value.length;
+        if (onProgress) onProgress(total ? Math.min(got, total) : got, total || got);
+      }
+      bytes = new Uint8Array(got);
+      let p = 0;
+      for (const c of parts) {
+        bytes.set(c, p);
+        p += c.length;
+      }
+    } else bytes = new Uint8Array(await res.arrayBuffer());
+    const real = await gitBlobSha(bytes);
+    if (real && real !== sha) throw new GhError("network", 0, "\u0424\u0430\u0439\u043B \u0441\u043A\u0430\u0447\u0430\u043B\u0441\u044F \u043D\u0435 \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E \u0438\u043B\u0438 \u0438\u0441\u043A\u0430\u0436\u0451\u043D (\u043A\u043E\u043D\u0442\u0440\u043E\u043B\u044C\u043D\u0430\u044F \u0441\u0443\u043C\u043C\u0430 \u043D\u0435 \u0441\u043E\u0432\u043F\u0430\u043B\u0430). \u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u0435.");
+    try {
+      await cache.set(key, bytes.buffer.byteLength === bytes.length ? bytes.buffer : bytes.slice().buffer);
+      await bigTouch(key, bytes.length);
+    } catch {
+    }
+    return bytes;
+  }
   async function getFileSha(cfg, repoPath, o) {
     try {
       const j = await (await request(cfg, "GET", `${rp(cfg)}/contents/${enc(repoPath)}?ref=${encodeURIComponent(cfg.branch)}`, o)).json();
@@ -2656,7 +2778,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       if (cfg.branch) body.branch = cfg.branch;
       const j = await (await request(cfg, "PUT", `${rp(cfg)}/contents/${enc(repoPath)}`, { ...o, body })).json();
       const nsha = j.content && j.content.sha;
-      if (nsha) {
+      if (nsha && bytes.length <= SMALL) {
         try {
           await cache.set("blob:" + nsha, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
         } catch {
@@ -2676,7 +2798,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
   // src/app/store.js
   var hasFSA = typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
   var SKEY = "jhora-web-settings-v1";
-  var UI_DEFAULTS = { style: "south", ayanamsa: 1, trueNode: false, houseSystem: "O", yearLen: 365.25, sunriseCenter: false, karakas: 7, degrees: true, marks: true, outer: true, charaDir: "ninth", charaExaltAdj: false, mode: "charts", pdfNight: false, pdfPanel: "notes" };
+  var UI_DEFAULTS = { style: "south", ayanamsa: 1, trueNode: false, houseSystem: "O", yearLen: 365.25, sunriseCenter: false, karakas: 7, degrees: true, marks: true, outer: true, charaDir: "ninth", charaExaltAdj: false, mode: "charts", baseKind: "charts", pdfNight: false, pdfPanel: "notes" };
   function loadSettings() {
     try {
       return { ...UI_DEFAULTS, ...JSON.parse(localStorage.getItem(SKEY) || "{}") };
@@ -2723,6 +2845,18 @@ details.more[open] > summary { margin-bottom: .5rem; }
       });
     } catch {
       return null;
+    }
+  }
+  async function kvDelete(key) {
+    try {
+      const db = await idb();
+      await new Promise((res) => {
+        const tx = db.transaction("kv", "readwrite");
+        tx.objectStore("kv").delete(key);
+        tx.oncomplete = res;
+        tx.onerror = res;
+      });
+    } catch {
     }
   }
   async function rememberDir(handle, key = "dir") {
@@ -2848,7 +2982,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
     if (onTick) onTick(done);
     if (netError) throw netError;
   }
-  var NOTES_SUFFIX = ".notes.json";
+  var NOTES_SUFFIX2 = ".notes.json";
   async function scanPdfDirectory(root, onProgress) {
     const out = [];
     async function walk(dir, prefix, depth) {
@@ -2861,7 +2995,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       }
       for (const [name, h] of files) {
         if (out.length >= MAX_FILES) return;
-        out.push({ name, path: prefix + name, dirPath: prefix, handle: h, dir, hasNotes: names.has(name + NOTES_SUFFIX) });
+        out.push({ name, path: prefix + name, dirPath: prefix, handle: h, dir, hasNotes: names.has(name + NOTES_SUFFIX2) });
       }
       if (onProgress) onProgress(out.length);
       for (const [name, h] of dirs) {
@@ -2876,12 +3010,12 @@ details.more[open] > summary { margin-bottom: .5rem; }
     const out = [], side = /* @__PURE__ */ new Map();
     for (const f of files) {
       const rel = f.webkitRelativePath || f.name, parts = rel.split("/"), path = parts.slice(1).join("/") || f.name;
-      if (f.name.endsWith(NOTES_SUFFIX)) side.set(path, f);
+      if (f.name.endsWith(NOTES_SUFFIX2)) side.set(path, f);
     }
     for (const f of files) {
       if (!/\.pdf$/i.test(f.name)) continue;
       const rel = f.webkitRelativePath || f.name, parts = rel.split("/"), path = parts.slice(1).join("/") || f.name;
-      const sc = side.get(path + NOTES_SUFFIX);
+      const sc = side.get(path + NOTES_SUFFIX2);
       out.push({ name: f.name, path, dirPath: path.slice(0, path.length - f.name.length), file: f, size: f.size, mtime: f.lastModified, sidecarFile: sc || null, hasNotes: !!sc });
     }
     return out;
@@ -5133,6 +5267,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
   <li>\u0421\u043E\u043B\u043D\u0435\u0447\u043D\u044B\u0435 \u0438 \u043B\u0443\u043D\u043D\u044B\u0435 \u0437\u0430\u0442\u043C\u0435\u043D\u0438\u044F \u0437\u0430 \u043B\u044E\u0431\u043E\u0439 \u043F\u0435\u0440\u0438\u043E\u0434: \u0442\u0438\u043F, \u0432\u0435\u043B\u0438\u0447\u0438\u043D\u0430, \u0441\u0438\u0434\u0435\u0440\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u043F\u043E\u0437\u0438\u0446\u0438\u044F, \u043D\u0430\u043A\u0448\u0430\u0442\u0440\u0430, \u0434\u043E\u043C\u0430 \u043E\u0442 \u043B\u0430\u0433\u043D\u044B \u0438 \u041B\u0443\u043D\u044B, \u0437\u0430\u0442\u0440\u043E\u043D\u0443\u0442\u044B\u0435 \u043D\u0430\u0442\u0430\u043B\u044C\u043D\u044B\u0435 \u0442\u043E\u0447\u043A\u0438, \u0432\u0438\u0434\u0438\u043C\u043E\u0441\u0442\u044C \u0432 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u043C \u043C\u0435\u0441\u0442\u0435.</li>
   <li>\u041F\u0430\u043D\u0447\u0430\u043D\u0433\u0430 \u0434\u043D\u044F \u0438 \u043C\u0435\u0441\u044F\u0446\u0430.</li>
   <li>\u0411\u0430\u0437\u0430 (\u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF | \u0411\u0430\u0437\u0430\xBB): \u0432\u0430\u0448\u0438 \u043A\u0430\u0440\u0442\u044B \u0432 \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 GitHub \u2014 \u0441\u043F\u0438\u0441\u043E\u043A \u0441 \u043F\u043E\u0438\u0441\u043A\u043E\u043C \u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0435\u043C, \xAB\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C\xBB \u0438 \xAB\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u043A\u2026\xBB \u043F\u0440\u044F\u043C\u043E \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 (\u043A\u0430\u0436\u0434\u044B\u0439 \u0440\u0430\u0437 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043C\u043C\u0438\u0442, \u0438\u0441\u0442\u043E\u0440\u0438\u044F \u0432\u0435\u0440\u0441\u0438\u0439 \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F \u043D\u0430 GitHub), \xAB\u0412 \u0431\u0430\u0437\u0443\xBB \u0434\u043B\u044F \u043A\u0430\u0440\u0442\u044B \u0441 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0430, \xAB\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u0437 \u0431\u0430\u0437\u044B\xBB, \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0446\u0435\u043B\u043E\u0439 \u043F\u0430\u043F\u043A\u0438 \u0441 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u043C \u0443\u0436\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043D\u044B\u0445 \u043A\u0430\u0440\u0442. \u0414\u043E\u0441\u0442\u0443\u043F \u2014 \u043B\u0438\u0447\u043D\u044B\u0439 \u0442\u043E\u043A\u0435\u043D GitHub \u043D\u0430 \u043E\u0434\u0438\u043D \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 (\u043F\u0440\u0430\u0432\u043E Contents: Read and write); \u043E\u043D \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C \u0442\u0435\u043A\u0441\u0442\u043E\u043C \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 api.github.com. \u0421\u0430\u0439\u0442 \u0441 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043E\u0439 \u043F\u0440\u0438 \u044D\u0442\u043E\u043C \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u043C: \u0431\u0435\u0437 \u0442\u043E\u043A\u0435\u043D\u0430 \u0432 \u043D\u0451\u043C \u043D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445.</li>
+  <li>\u0411\u0430\u0437\u0430 PDF (\u0432 \xAB\u0411\u0430\u0437\u0435\xBB \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF\xBB): \u0442\u0435 \u0436\u0435 \u0444\u0430\u0439\u043B\u044B \u0438 \u0447\u0438\u0442\u0430\u043B\u043A\u0430, \u043D\u043E PDF \u043B\u0435\u0436\u0430\u0442 \u0432 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u043F\u0430\u043F\u043A\u0435 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F (\u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E <code>pdf</code>), \u0430 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u043A\u0430\u0436\u0434\u043E\u043C\u0443 \u2014 \u0440\u044F\u0434\u043E\u043C, \u0432 \u0444\u0430\u0439\u043B\u0435 <code>\u0438\u043C\u044F.pdf.notes.json</code>. PDF \u0441\u043A\u0430\u0447\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u0446\u0435\u043B\u0438\u043A\u043E\u043C \u043F\u0440\u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0438 (\u0441 \u0438\u043D\u0434\u0438\u043A\u0430\u0442\u043E\u0440\u043E\u043C) \u0438 \u0437\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u0435\u0442\u0441\u044F \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 (\u0434\u043E ~400 \u041C\u0411, \u0434\u043E\u043B\u044C\u0448\u0435 \u0432\u0441\u0435\u0433\u043E \u043D\u0435 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0432\u0448\u0438\u0435\u0441\u044F \u0443\u0434\u0430\u043B\u044F\u044E\u0442\u0441\u044F \u043F\u0435\u0440\u0432\u044B\u043C\u0438), \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443. \u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u0447\u0435\u0440\u0435\u0437 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0435\u043A\u0443\u043D\u0434 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0430\u0432\u043A\u0438 \u043E\u0434\u043D\u0438\u043C \u043A\u043E\u043C\u043C\u0438\u0442\u043E\u043C; \u0435\u0441\u043B\u0438 \u0444\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438 \u043D\u0430 \u0434\u0440\u0443\u0433\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435, \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u044F\u044E\u0442\u0441\u044F (\u043F\u043E \u043D\u043E\u043C\u0435\u0440\u0443 \u0437\u0430\u043C\u0435\u0442\u043A\u0438, \u043F\u043E\u0431\u0435\u0436\u0434\u0430\u0435\u0442 \u0431\u043E\u043B\u0435\u0435 \u043D\u043E\u0432\u0430\u044F), \u043D\u043E \u0437\u0430\u043C\u0435\u0442\u043A\u0430, \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u0430\u044F \u043D\u0430 \u043E\u0434\u043D\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435, \u043C\u043E\u0436\u0435\u0442 \u0432\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0441 \u0434\u0440\u0443\u0433\u043E\u0433\u043E. \u041A\u043D\u043E\u043F\u043A\u0438 \u0447\u0438\u0442\u0430\u043B\u043A\u0438 \xAB\u0412 \u0431\u0430\u0437\u0443\xBB (PDF \u0441 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0430, \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u0437\u0430\u043C\u0435\u0442\u043A\u0430\u043C\u0438) \u0438 \xAB\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u0437 \u0431\u0430\u0437\u044B\xBB, \u0430 \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438 \xAB\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C PDF \u0432 \u0431\u0430\u0437\u0443\u2026\xBB \u0434\u043B\u044F \u0446\u0435\u043B\u043E\u0439 \u043F\u0430\u043F\u043A\u0438 (\u043E\u0434\u0438\u043D\u0430\u043A\u043E\u0432\u044B\u0435 \u0444\u0430\u0439\u043B\u044B \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u044E\u0442\u0441\u044F, \u0437\u0430\u043C\u0435\u0442\u043A\u0438, \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u0432 \u0431\u0430\u0437\u0435 \u0443\u0436\u0435 \u0435\u0441\u0442\u044C, \u043D\u0435 \u0437\u0430\u0442\u0438\u0440\u0430\u044E\u0442\u0441\u044F).</li>
   <li>\u0427\u0438\u0442\u0430\u043B\u043A\u0430 PDF (\u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF\xBB \u0441\u043B\u0435\u0432\u0430): \u0441\u0432\u043E\u044F \u043F\u0430\u043F\u043A\u0430 \u0441 \u0432\u043B\u043E\u0436\u0435\u043D\u043D\u044B\u043C\u0438 \u043F\u0430\u043F\u043A\u0430\u043C\u0438, \u043F\u043E\u0438\u0441\u043A \u0438 \u0441\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u043A\u0430, \u0437\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435 \u043F\u0430\u043F\u043A\u0438 \u0438 \u043C\u0435\u0441\u0442\u0430 \u0432 \u043A\u0430\u0436\u0434\u043E\u043C \u0444\u0430\u0439\u043B\u0435; \u043C\u0430\u0441\u0448\u0442\u0430\u0431 10\u2013800 % (Ctrl + \u043A\u043E\u043B\u0435\u0441\u043E, \u0449\u0438\u043F\u043E\u043A, \xAB\u041F\u043E \u0448\u0438\u0440\u0438\u043D\u0435\xBB, \xAB\u0426\u0435\u043B\u0438\u043A\u043E\u043C\xBB), \u043E\u0433\u043B\u0430\u0432\u043B\u0435\u043D\u0438\u0435, \u043F\u043E\u0438\u0441\u043A \u043F\u043E \u0442\u0435\u043A\u0441\u0442\u0443, \u0441\u0441\u044B\u043B\u043A\u0438 \u0432\u043D\u0443\u0442\u0440\u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430, \u043D\u043E\u0447\u043D\u043E\u0439 \u0440\u0435\u0436\u0438\u043C, \u0432\u0432\u043E\u0434 \u043F\u0430\u0440\u043E\u043B\u044F.</li>
   <li>\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0432 \u0447\u0438\u0442\u0430\u043B\u043A\u0435: \u0432\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u2014 \u043F\u043E\u0434\u0441\u0432\u0435\u0442\u043A\u0430 \u0438\u043B\u0438 \u043F\u043E\u0434\u0447\u0451\u0440\u043A\u0438\u0432\u0430\u043D\u0438\u0435 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u043C; \u043C\u0435\u0442\u043A\u0430 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u043C \u0432 \u043B\u044E\u0431\u043E\u043C \u043C\u0435\u0441\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043A\u043D\u043E\u043F\u043A\u0430 \xAB\u0417\u0430\u043C\u0435\u0442\u043A\u0430\xBB); \u0441\u043F\u0438\u0441\u043E\u043A \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0441 \u0444\u0438\u043B\u044C\u0442\u0440\u043E\u043C, \u044D\u043A\u0441\u043F\u043E\u0440\u0442 \u0432 Markdown \u0438 JSON, \u0438\u043C\u043F\u043E\u0440\u0442 JSON.</li></ul>
   <h3>\u0427\u0435\u0433\u043E \u043D\u0435\u0442</h3>
@@ -5144,7 +5279,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
   <li>\u0410\u0442\u043B\u0430\u0441 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u043C\u0435\u0441\u0442\u0430 \u043E\u0442 1000 \u0436\u0438\u0442\u0435\u043B\u0435\u0439; \u0435\u0441\u043B\u0438 \u043C\u0435\u0441\u0442\u0430 \u043D\u0435\u0442, \u0432\u0432\u0435\u0434\u0438\u0442\u0435 \u043A\u043E\u043E\u0440\u0434\u0438\u043D\u0430\u0442\u044B \u0432\u0440\u0443\u0447\u043D\u0443\u044E. \u0427\u0430\u0441\u043E\u0432\u043E\u0439 \u043F\u043E\u044F\u0441 \u0431\u0435\u0440\u0451\u0442\u0441\u044F \u0438\u0437 \u0431\u0430\u0437\u044B \u0432\u0430\u0448\u0435\u0433\u043E \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430: \u0434\u043B\u044F \u0434\u0430\u0442 \u0434\u043E 1900 \u0433\u043E\u0434\u0430 \u0438 \u0434\u043B\u044F \u0441\u043F\u043E\u0440\u043D\u044B\u0445 \u0442\u0435\u0440\u0440\u0438\u0442\u043E\u0440\u0438\u0439 \u0435\u0433\u043E \u043D\u0443\u0436\u043D\u043E \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u0442\u044C.</li>
   <li>\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u043A PDF \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u043D\u0435 \u0432\u043D\u0443\u0442\u0440\u0438 PDF (\u0444\u0430\u0439\u043B \u043D\u0435 \u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F), \u0430 \u0432 \u0444\u0430\u0439\u043B\u0435 <code>\u0438\u043C\u044F.pdf.notes.json</code> \u0440\u044F\u0434\u043E\u043C \u0441 \u043D\u0438\u043C, \u0435\u0441\u043B\u0438 \u043F\u0430\u043F\u043A\u0430 \u043E\u0442\u043A\u0440\u044B\u0442\u0430 \u0441 \u043F\u0440\u0430\u0432\u043E\u043C \u0437\u0430\u043F\u0438\u0441\u0438, \u0438 \u0432 \u043A\u043E\u043F\u0438\u0438 \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435; \u0432 \u0434\u0440\u0443\u0433\u043E\u043C PDF-\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440\u0449\u0438\u043A\u0435 \u043E\u043D\u0438 \u0432\u0438\u0434\u043D\u044B \u043D\u0435 \u0431\u0443\u0434\u0443\u0442. \u0415\u0441\u043B\u0438 \u043F\u0430\u043F\u043A\u0430 \u043E\u0442\u043A\u0440\u044B\u0442\u0430 \u0432 \u0440\u0435\u0436\u0438\u043C\u0435 \xAB\u0442\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u0435\u043D\u0438\u0435\xBB, \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u0436\u0438\u0432\u0443\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u2014 \u044D\u043A\u0441\u043F\u043E\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0438\u0445.</li>
   <li>\u0412 \u0447\u0438\u0442\u0430\u043B\u043A\u0435 \u043D\u0435\u0442: \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u043B\u044C\u043D\u044B\u0445 \u0442\u0435\u043A\u0441\u0442\u043E\u0432\u044B\u0445 \u0431\u043B\u043E\u043A\u043E\u0432 \u0438 \u0440\u0438\u0441\u043E\u0432\u0430\u043D\u0438\u044F \u043F\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435, \u043F\u043E\u0432\u043E\u0440\u043E\u0442\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446, \u043F\u0435\u0447\u0430\u0442\u0438, \u0444\u043E\u0440\u043C \u0438 JavaScript \u0432 PDF, \u043F\u043E\u0434\u043F\u0438\u0441\u0435\u0439. \u0428\u0440\u0438\u0444\u0442\u044B \u0441\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u044B\u0445 14 \u0438 CJK-\u0448\u0440\u0438\u0444\u0442\u044B \u0431\u0435\u0437 \u0432\u0441\u0442\u0440\u0430\u0438\u0432\u0430\u043D\u0438\u044F \u0437\u0430\u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u044B\u043C\u0438, ICC-\u043F\u0440\u043E\u0444\u0438\u043B\u0438 \u043D\u0435 \u043F\u0440\u0438\u043C\u0435\u043D\u044F\u044E\u0442\u0441\u044F.</li>
-  <li>\u0420\u0435\u0436\u0438\u043C \xAB\u0411\u0430\u0437\u0430\xBB \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D \u043D\u0430 \u0438\u043C\u0438\u0442\u0430\u0446\u0438\u0438 API GitHub \u043F\u043E \u0435\u0433\u043E \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u0438; \u043A \u0441\u0430\u043C\u043E\u043C\u0443 GitHub \u0432 \u0441\u0440\u0435\u0434\u0435 \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u0430 \u043D\u0435 \u0431\u044B\u043B\u043E, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u0435\u0440\u0432\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443 \u0441\u0434\u0435\u043B\u0430\u0439\u0442\u0435 \u043D\u0430 \u0442\u0435\u0441\u0442\u043E\u0432\u043E\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438. GitHub \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442 \u0437\u0430\u043F\u0438\u0441\u0438 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u043E\u0434\u043D\u043E\u0439 (\u0430 \u043D\u0430 \u0447\u0430\u0441\u0442\u044B\u0435 \u0437\u0430\u043F\u0438\u0441\u0438 \u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u0432\u0435\u0442\u0438\u0442\u044C \xAB\u043F\u043E\u0434\u043E\u0436\u0434\u0438\u0442\u0435\xBB), \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0441\u043E\u0442\u0435\u043D \u043A\u0430\u0440\u0442 \u0438\u0434\u0451\u0442 \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u043E \u2014 \u043F\u0440\u0438\u043C\u0435\u0440\u043D\u043E \u043F\u043E \u043A\u0430\u0440\u0442\u0435 \u0432 \u0441\u0435\u043A\u0443\u043D\u0434\u0443, \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u044B \u043F\u0430\u0443\u0437\u044B. \u0412 \u0431\u0430\u0437\u0435 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043A\u0430\u0440\u0442\u044B <code>.jhd</code>, PDF \u0438 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u043D\u0438\u043C \u0432 \u0431\u0430\u0437\u0443 \u043D\u0435 \u043F\u043E\u043F\u0430\u0434\u0430\u044E\u0442. \u0415\u0441\u043B\u0438 \u043A\u0430\u0440\u0442\u0443 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438 \u043D\u0430 \u0434\u0440\u0443\u0433\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435, \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043D\u0435 \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0438\u0448\u0435\u0442 \u0447\u0443\u0436\u0443\u044E \u043F\u0440\u0430\u0432\u043A\u0443, \u0430 \u0441\u043E\u043E\u0431\u0449\u0438\u0442 \u043E \u043A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u0435.</li>
+  <li>\u0420\u0435\u0436\u0438\u043C \xAB\u0411\u0430\u0437\u0430\xBB \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D \u043D\u0430 \u0438\u043C\u0438\u0442\u0430\u0446\u0438\u0438 API GitHub \u043F\u043E \u0435\u0433\u043E \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430\u0446\u0438\u0438; \u043A \u0441\u0430\u043C\u043E\u043C\u0443 GitHub \u0432 \u0441\u0440\u0435\u0434\u0435 \u0440\u0430\u0437\u0440\u0430\u0431\u043E\u0442\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u0430 \u043D\u0435 \u0431\u044B\u043B\u043E, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u0435\u0440\u0432\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443 \u0441\u0434\u0435\u043B\u0430\u0439\u0442\u0435 \u043D\u0430 \u0442\u0435\u0441\u0442\u043E\u0432\u043E\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438. GitHub \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442 \u0437\u0430\u043F\u0438\u0441\u0438 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u043E\u0434\u043D\u043E\u0439 (\u0430 \u043D\u0430 \u0447\u0430\u0441\u0442\u044B\u0435 \u0437\u0430\u043F\u0438\u0441\u0438 \u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u0432\u0435\u0442\u0438\u0442\u044C \xAB\u043F\u043E\u0434\u043E\u0436\u0434\u0438\u0442\u0435\xBB), \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0441\u043E\u0442\u0435\u043D \u043A\u0430\u0440\u0442 \u0438\u0434\u0451\u0442 \u043C\u0435\u0434\u043B\u0435\u043D\u043D\u043E \u2014 \u043F\u0440\u0438\u043C\u0435\u0440\u043D\u043E \u043F\u043E \u043A\u0430\u0440\u0442\u0435 \u0432 \u0441\u0435\u043A\u0443\u043D\u0434\u0443, \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u044B \u043F\u0430\u0443\u0437\u044B. \u0411\u0430\u0437\u0430 PDF \u043D\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u044F\u043B\u0430\u0441\u044C \u043D\u0430 \u0441\u0430\u043C\u043E\u043C GitHub \u0432\u043E\u0432\u0441\u0435, \u0432 \u0442\u043E\u043C \u0447\u0438\u0441\u043B\u0435 \u043D\u0430 \u0431\u043E\u043B\u044C\u0448\u0438\u0445 \u0444\u0430\u0439\u043B\u0430\u0445: GitHub \u043D\u0435 \u043D\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043F\u0440\u0435\u0434\u0435\u043B \u0440\u0430\u0437\u043C\u0435\u0440\u0430 \u0434\u043B\u044F \u0437\u0430\u043F\u0438\u0441\u0438 \u0444\u0430\u0439\u043B\u0430 \u0447\u0435\u0440\u0435\u0437 \u0441\u0430\u0439\u0442, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0430 \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442 \u0444\u0430\u0439\u043B\u044B \u0431\u043E\u043B\u044C\u0448\u0435 50 \u041C\u0411 (GitHub \u0441\u0430\u043C \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0436\u0434\u0430\u0435\u0442 \u043E \u0442\u0430\u043A\u0438\u0445 \u0438 \u043E\u0442\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442 \u043F\u0440\u0438 100 \u041C\u0411), \u0430 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 GitHub \u0441\u043E\u0432\u0435\u0442\u0443\u0435\u0442 \u0434\u0435\u0440\u0436\u0430\u0442\u044C \u0434\u043E 1 \u0413\u0411 \u2014 \u043F\u0440\u0438 \u0437\u0430\u043C\u0435\u0442\u043D\u043E \u0431\u043E\u043B\u044C\u0448\u0435\u0439 \u043A\u043E\u043B\u043B\u0435\u043A\u0446\u0438\u0438 \u043A\u043D\u0438\u0433 \u043B\u0443\u0447\u0448\u0435 \u0434\u0440\u0443\u0433\u043E\u0435 \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435 (\u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0430 \u043F\u0440\u0435\u0434\u0443\u043F\u0440\u0435\u0434\u0438\u0442, \u043A\u043E\u0433\u0434\u0430 \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 \u0441\u0442\u0430\u043D\u0435\u0442 \u0431\u043E\u043B\u044C\u0448\u0435 900 \u041C\u0411). \u0414\u0430\u0442 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0444\u0430\u0439\u043B\u043E\u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u043D\u0435 \u0441\u043E\u043E\u0431\u0449\u0430\u0435\u0442, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u0441\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u043A\u0438 PDF \xAB\u043F\u043E \u0434\u0430\u0442\u0435\xBB \u0432 \u0431\u0430\u0437\u0435 \u043D\u0435\u0442. \u0415\u0441\u043B\u0438 \u043A\u0430\u0440\u0442\u0443 \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438, \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043D\u0435 \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0438\u0448\u0435\u0442 \u0447\u0443\u0436\u0443\u044E \u043F\u0440\u0430\u0432\u043A\u0443, \u0430 \u0441\u043E\u043E\u0431\u0449\u0438\u0442 \u043E \u043A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u0435.</li>
   <li>\u0417\u0430\u043F\u0438\u0441\u044C <code>.jhd</code> \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u0430 \u043D\u0430 \u0440\u0430\u0437\u0431\u043E\u0440\u0435 \u0441\u043E\u0431\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0445 \u0444\u0430\u0439\u043B\u043E\u0432, \u043D\u043E \u043D\u0435 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u043B\u0430\u0441\u044C \u0432 \u0441\u0430\u043C\u043E\u0439 Jagannatha Hora \u2014 \u0434\u043B\u044F \u0432\u0430\u0436\u043D\u044B\u0445 \u043A\u0430\u0440\u0442 \u0441\u043D\u0430\u0447\u0430\u043B\u0430 \u0441\u0434\u0435\u043B\u0430\u0439\u0442\u0435 \u043A\u043E\u043F\u0438\u044E \u043F\u0430\u043F\u043A\u0438.</li></ul>
   <h3>\u042D\u0444\u0435\u043C\u0435\u0440\u0438\u0434\u044B, \u0434\u0430\u043D\u043D\u044B\u0435 \u0438 \u043B\u0438\u0446\u0435\u043D\u0437\u0438\u0438</h3>
   <p>\u041F\u043E\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0441\u0447\u0438\u0442\u0430\u044E\u0442\u0441\u044F \u0431\u0438\u0431\u043B\u0438\u043E\u0442\u0435\u043A\u043E\u0439 Swiss Ephemeris (\xA9 Astrodienst AG), \u0441\u043A\u043E\u043C\u043F\u0438\u043B\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0439 \u0432 WebAssembly (\u043F\u0430\u043A\u0435\u0442 sweph-wasm), \u0432 \u0440\u0435\u0436\u0438\u043C\u0435 Moshier \u0431\u0435\u0437 \u0444\u0430\u0439\u043B\u043E\u0432 \u044D\u0444\u0435\u043C\u0435\u0440\u0438\u0434. \u0414\u043B\u044F \u043F\u0440\u0430\u043A\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u0430\u0441\u0442\u0440\u043E\u043B\u043E\u0433\u0438\u0438 \u0442\u043E\u0447\u043D\u043E\u0441\u0442\u044C \u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u0430 (\u0434\u043E\u043B\u0438 \u0443\u0433\u043B\u043E\u0432\u043E\u0439 \u043C\u0438\u043D\u0443\u0442\u044B); \u043D\u0430 \u043E\u0447\u0435\u043D\u044C \u0434\u0430\u043B\u0451\u043A\u0438\u0445 \u044D\u043F\u043E\u0445\u0430\u0445 \u043E\u043D\u0430 \u043D\u0438\u0436\u0435. \u0421\u0432\u0435\u0440\u043A\u0430 \u0441 \u043F\u043E\u043B\u043E\u0436\u0435\u043D\u0438\u044F\u043C\u0438, \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u043C\u0438 \u0432 \u0441\u0442\u0430\u0440\u044B\u0445 \u0444\u0430\u0439\u043B\u0430\u0445 JHora, \u0434\u0430\u043B\u0430 \u0440\u0430\u0441\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u0434\u043E 0,03\xB0. Swiss Ephemeris \u0440\u0430\u0441\u043F\u0440\u043E\u0441\u0442\u0440\u0430\u043D\u044F\u0435\u0442\u0441\u044F \u043F\u043E \u043B\u0438\u0446\u0435\u043D\u0437\u0438\u0438 AGPL-3.0, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u044D\u0442\u0430 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0430, \u0441\u043E\u0434\u0435\u0440\u0436\u0430\u0449\u0430\u044F \u0435\u0451, \u0442\u043E\u0436\u0435 \u043F\u043E\u0434\u0447\u0438\u043D\u044F\u0435\u0442\u0441\u044F AGPL-3.0 \u043F\u0440\u0438 \u043F\u0435\u0440\u0435\u0434\u0430\u0447\u0435 \u0434\u0440\u0443\u0433\u0438\u043C \u043B\u044E\u0434\u044F\u043C: \u043A\u043E\u0434 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0432 \u044D\u0442\u043E\u043C \u0444\u0430\u0439\u043B\u0435 \u043D\u0435 \u043C\u0438\u043D\u0438\u0444\u0438\u0446\u0438\u0440\u043E\u0432\u0430\u043D, \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A\u0438 Swiss Ephemeris \u2014 github.com/aloistr/swisseph, \u043E\u0431\u0451\u0440\u0442\u043A\u0438 \u2014 github.com/ptprashanttripathi/sweph-wasm.</p>
@@ -5542,7 +5677,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
   ];
   var colorHex = (id) => (COLORS.find((c) => c.id === id) || COLORS[0]).hex;
   var newId = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  var sidecarName = (pdfName) => pdfName + NOTES_SUFFIX;
+  var sidecarName = (pdfName) => pdfName + NOTES_SUFFIX2;
   var r5 = (x) => Math.round(x * 1e5) / 1e5;
   function clean(n) {
     if (!n || typeof n !== "object" || typeof n.id !== "string" || !Number.isInteger(n.page) || n.page < 1) return null;
@@ -5568,7 +5703,10 @@ details.more[open] > summary { margin-bottom: .5rem; }
       this.where = "browser";
       this.error = "";
       this.sideCorrupt = false;
-      this.canWriteFile = !!(entry && entry.dir);
+      this.io = entry && entry.io ? entry.io : null;
+      this.canWriteFile = !!(entry && entry.dir) || !!(this.io && this.io.canWrite());
+      this.delay = this.io ? 4e3 : 500;
+      this.chain = Promise.resolve();
       this.listeners = /* @__PURE__ */ new Set();
     }
     static async open(entry, fp, numPages) {
@@ -5581,16 +5719,21 @@ details.more[open] > summary { margin-bottom: .5rem; }
     }
     async readSidecar() {
       const e2 = this.entry;
-      let file = null;
-      if (e2.dir) {
-        try {
-          file = await (await e2.dir.getFileHandle(this.sidecar)).getFile();
-        } catch (err2) {
-          if (err2.name !== "NotFoundError") throw err2;
-        }
-      } else if (e2.sidecarFile) file = e2.sidecarFile;
-      if (!file) return null;
-      const text = await file.text();
+      let file = null, text;
+      if (e2.io) {
+        text = await e2.io.readNotes(false);
+        if (text === null || text === void 0) return null;
+      } else {
+        if (e2.dir) {
+          try {
+            file = await (await e2.dir.getFileHandle(this.sidecar)).getFile();
+          } catch (err2) {
+            if (err2.name !== "NotFoundError") throw err2;
+          }
+        } else if (e2.sidecarFile) file = e2.sidecarFile;
+        if (!file) return null;
+        text = await file.text();
+      }
       let obj;
       try {
         obj = JSON.parse(text);
@@ -5617,7 +5760,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       this.list = (src ? src.notes : []).map(clean).filter(Boolean);
       if (src === mirror && mirror && side === null && this.canWriteFile && this.list.length && !this.sideCorrupt) this.dirty = true;
       if (src === mirror && side && mt > st && !this.sideCorrupt) this.dirty = true;
-      this.where = side && src === side ? "file" : "browser";
+      this.where = side && src === side ? this.io ? "base" : "file" : "browser";
       if (this.dirty) this.schedule(0);
     }
     onChange(fn) {
@@ -5669,17 +5812,24 @@ details.more[open] > summary { margin-bottom: .5rem; }
     }
     touch() {
       this.dirty = true;
-      this.schedule(500);
+      this.schedule(this.delay);
     }
     schedule(ms) {
       clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.flush(), ms);
+      this.timer = setTimeout(() => this.flush().catch(() => {
+      }), ms);
     }
     toJSON() {
       return { app: "JyotishaDesk", kind: "pdf-notes", v: 1, file: this.entry.name, fingerprint: this.fp, pages: this.numPages, saved: (/* @__PURE__ */ new Date()).toISOString(), notes: this.list };
     }
-    async flush() {
+    flush() {
       clearTimeout(this.timer);
+      const p = this.chain.then(() => this.flushNow());
+      this.chain = p.catch(() => {
+      });
+      return p;
+    }
+    async flushNow() {
       if (!this.dirty) return;
       this.dirty = false;
       const doc = this.toJSON();
@@ -5687,7 +5837,18 @@ details.more[open] > summary { margin-bottom: .5rem; }
         await kvSet("pdfnotes:" + this.fp, doc);
       } catch {
       }
-      if (this.canWriteFile && !this.sideCorrupt) {
+      if (this.io && this.canWriteFile && !this.sideCorrupt) {
+        try {
+          await this.writeRemote();
+          this.where = "base";
+          this.error = "";
+        } catch (e2) {
+          this.where = "browser";
+          this.error = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u0432 \u0431\u0430\u0437\u0443: " + (e2 && e2.message ? e2.message : e2);
+          this.dirty = true;
+          if (!e2 || !["auth", "forbidden", "notfound"].includes(e2.kind)) this.schedule(3e4);
+        }
+      } else if (this.canWriteFile && !this.sideCorrupt) {
         try {
           const dir = this.entry.dir;
           if (dir.queryPermission && await dir.queryPermission({ mode: "readwrite" }) !== "granted") throw new Error("\u043D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u0430 \u043D\u0430 \u0437\u0430\u043F\u0438\u0441\u044C \u0432 \u043F\u0430\u043F\u043A\u0443");
@@ -5704,8 +5865,29 @@ details.more[open] > summary { margin-bottom: .5rem; }
       } else if (!this.canWriteFile) this.where = "browser";
       this.emit("saved");
     }
+    async writeRemote() {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await this.io.writeNotes(JSON.stringify(this.toJSON(), null, 1));
+          return;
+        } catch (err2) {
+          if (attempt >= 2 || !err2 || err2.kind !== "conflict" && err2.kind !== "invalid") throw err2;
+          const text = await this.io.readNotes(true);
+          if (text) {
+            let obj;
+            try {
+              obj = JSON.parse(text);
+            } catch {
+              throw new Error("\u0444\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0432 \u0431\u0430\u0437\u0435 \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D, \u043E\u043D \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0438\u0441\u0430\u043D");
+            }
+            if (obj && Array.isArray(obj.notes)) this.mergeIn(obj.notes);
+          }
+        }
+      }
+    }
     statusText() {
       if (this.error) return this.error + " \u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.";
+      if (this.io) return this.canWriteFile ? `\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u0432 \u0431\u0430\u0437\u0435, \u0432 \u0444\u0430\u0439\u043B\u0435 \xAB${this.sidecar}\xBB \u0440\u044F\u0434\u043E\u043C \u0441 PDF (\u0437\u0430\u043F\u0438\u0441\u044C \u0447\u0435\u0440\u0435\u0437 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0435\u043A\u0443\u043D\u0434 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0430\u0432\u043A\u0438), \u0438 \u043A\u043E\u043F\u0438\u0435\u0439 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435. \u0421\u0430\u043C PDF \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F.` : "\u0422\u043E\u043A\u0435\u043D \u0431\u0430\u0437\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0447\u0442\u0435\u043D\u0438\u044F: \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435. \u042D\u043A\u0441\u043F\u043E\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0438\u0445 \u0432 \u0444\u0430\u0439\u043B, \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u0432\u0430\u0436\u043D\u044B.";
       if (this.where === "file") return `\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u0432 \u0444\u0430\u0439\u043B\u0435 \xAB${this.sidecar}\xBB \u0440\u044F\u0434\u043E\u043C \u0441 PDF (\u0438 \u043A\u043E\u043F\u0438\u0435\u0439 \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435). \u0421\u0430\u043C PDF \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F.`;
       return this.canWriteFile ? "\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435; \u0444\u0430\u0439\u043B \u0440\u044F\u0434\u043E\u043C \u0441 PDF \u0431\u0443\u0434\u0435\u0442 \u0441\u043E\u0437\u0434\u0430\u043D \u043F\u0440\u0438 \u043F\u0435\u0440\u0432\u043E\u0439 \u0437\u0430\u043F\u0438\u0441\u0438." : "\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435: PDF \u043E\u0442\u043A\u0440\u044B\u0442 \u043D\u0435 \u0447\u0435\u0440\u0435\u0437 \u043F\u0430\u043F\u043A\u0443 \u0441 \u043F\u0440\u0430\u0432\u043E\u043C \u0437\u0430\u043F\u0438\u0441\u0438. \u042D\u043A\u0441\u043F\u043E\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0438\u0445 \u0432 \u0444\u0430\u0439\u043B, \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u0432\u0430\u0436\u043D\u044B.";
     }
@@ -5728,11 +5910,9 @@ details.more[open] > summary { margin-bottom: .5rem; }
       }
       return out.join("\n");
     }
-    importJSON(text) {
-      const obj = JSON.parse(text);
-      if (!obj || !Array.isArray(obj.notes)) throw new Error("\u042D\u0442\u043E \u043D\u0435 \u0444\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A.");
+    mergeIn(list) {
       let added = 0, updated = 0;
-      for (const raw of obj.notes) {
+      for (const raw of list) {
         const n = clean(raw);
         if (!n) continue;
         const cur = this.get(n.id);
@@ -5746,10 +5926,26 @@ details.more[open] > summary { margin-bottom: .5rem; }
           this.emit("update", cur);
         }
       }
-      if (added || updated) this.touch();
       return { added, updated };
     }
+    importJSON(text) {
+      const obj = JSON.parse(text);
+      if (!obj || !Array.isArray(obj.notes)) throw new Error("\u042D\u0442\u043E \u043D\u0435 \u0444\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A.");
+      const r = this.mergeIn(obj.notes);
+      if (r.added || r.updated) this.touch();
+      return r;
+    }
   };
+  function mergeNoteLists(a, b) {
+    const out = /* @__PURE__ */ new Map();
+    for (const raw of [...a || [], ...b || []]) {
+      const n = clean(raw);
+      if (!n) continue;
+      const cur = out.get(n.id);
+      if (!cur || n.u > cur.u) out.set(n.id, n);
+    }
+    return [...out.values()];
+  }
 
   // src/app/pdfreader.js
   var CSS_UNITS = 96 / 72;
@@ -5800,6 +5996,8 @@ details.more[open] > summary { margin-bottom: .5rem; }
         <button class="pb" data-pa="night" aria-pressed="false" title="\u0422\u0451\u043C\u043D\u0430\u044F \u0431\u0443\u043C\u0430\u0433\u0430 \u0434\u043B\u044F \u0447\u0442\u0435\u043D\u0438\u044F \u0432\u0435\u0447\u0435\u0440\u043E\u043C">\u041D\u043E\u0447\u044C</button>
       </div>
       <div class="pb-group pb-end">
+        <button class="pb" data-pa="tobase" hidden title="\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u044D\u0442\u043E\u0442 PDF (\u0438 \u0435\u0433\u043E \u0437\u0430\u043C\u0435\u0442\u043A\u0438) \u0432 \u0431\u0430\u0437\u0443 \u043D\u0430 GitHub">\u0412 \u0431\u0430\u0437\u0443</button>
+        <button class="pb" data-pa="delbase" hidden title="\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u044D\u0442\u043E\u0442 PDF \u0438 \u0435\u0433\u043E \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u0438\u0437 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F">\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u0437 \u0431\u0430\u0437\u044B</button>
         <button class="pb" data-pa="p-search" title="\u041F\u043E\u0438\u0441\u043A \u043F\u043E \u0442\u0435\u043A\u0441\u0442\u0443 (Ctrl \u0438 F)">\u041F\u043E\u0438\u0441\u043A</button>
         <button class="pb" data-pa="p-notes">\u0417\u0430\u043C\u0435\u0442\u043A\u0438 <span id="pb-nc" class="pb-badge"></span></button>
         <button class="pb" data-pa="p-toc">\u041E\u0433\u043B\u0430\u0432\u043B\u0435\u043D\u0438\u0435</button>
@@ -5838,6 +6036,11 @@ details.more[open] > summary { margin-bottom: .5rem; }
       el.state.hidden = !html;
     }
     function showEmpty() {
+      const custom = hooks.emptyHtml && hooks.emptyHtml();
+      if (custom) {
+        showState(custom);
+        return;
+      }
       const hasFolder = hooks.hasFolder();
       showState(`<div class="pdfhello"><h2>\u0427\u0438\u0442\u0430\u043B\u043A\u0430 PDF</h2><p>${hasFolder ? "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0444\u0430\u0439\u043B \u0432 \u0441\u043F\u0438\u0441\u043A\u0435 \u0441\u043B\u0435\u0432\u0430." : "\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u043F\u0430\u043F\u043A\u0443 \u0441 PDF-\u0444\u0430\u0439\u043B\u0430\u043C\u0438 (\u0432\u043B\u043E\u0436\u0435\u043D\u043D\u044B\u0435 \u043F\u0430\u043F\u043A\u0438 \u0442\u043E\u0436\u0435 \u0447\u0438\u0442\u0430\u044E\u0442\u0441\u044F) \u0438\u043B\u0438 \u043E\u0434\u0438\u043D \u0444\u0430\u0439\u043B."}</p>
       ${hasFolder ? "" : '<div class="actions"><button class="btn primary" data-side="pick">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u0430\u043F\u043A\u0443\u2026</button><button class="btn" data-side="file">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026</button></div>'}
@@ -6684,6 +6887,9 @@ details.more[open] > summary { margin-bottom: .5rem; }
         b.classList.toggle("on", panelTab === k);
         b.disabled = !open;
       }
+      const canBase = !!(open && entry && hooks.canToBase && hooks.canToBase());
+      el.bar.querySelector('[data-pa="tobase"]').hidden = !(canBase && !entry.remote);
+      el.bar.querySelector('[data-pa="delbase"]').hidden = !(canBase && entry.remote);
       const nb = el.bar.querySelector('[data-pa="night"]');
       nb.classList.toggle("on", night);
       nb.setAttribute("aria-pressed", String(night));
@@ -6768,8 +6974,18 @@ details.more[open] > summary { margin-bottom: .5rem; }
       };
       try {
         lib = await loadPdfJs();
-        const file = e2.handle ? await e2.handle.getFile() : e2.file;
-        const data = new Uint8Array(await file.arrayBuffer());
+        let data, fileSize;
+        if (e2.remote) {
+          const mb = (b) => (b / 1048576).toFixed(b >= 10485760 ? 0 : 1).replace(".", ",");
+          data = await hooks.readRemote(e2, (done, total) => {
+            if (myGen === gen) setLoad(`\u0421\u043A\u0430\u0447\u0438\u0432\u0430\u044E \u0438\u0437 \u0431\u0430\u0437\u044B: ${mb(done)} \u0438\u0437 ${mb(total)} \u041C\u0411\u2026`);
+          });
+          fileSize = data.length;
+        } else {
+          const file = e2.handle ? await e2.handle.getFile() : e2.file;
+          data = new Uint8Array(await file.arrayBuffer());
+          fileSize = file.size;
+        }
         if (myGen !== gen) return;
         setLoad("\u0420\u0430\u0437\u0431\u0438\u0440\u0430\u044E \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u2026");
         worker = new lib.PDFWorker({ port: newWorkerPort() });
@@ -6795,7 +7011,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
           return;
         }
         N2 = doc.numPages;
-        fp = doc.fingerprints && doc.fingerprints[0] || e2.name + ":" + file.size;
+        fp = doc.fingerprints && doc.fingerprints[0] || e2.name + ":" + fileSize;
         const p1 = await doc.getPage(1), vp = p1.getViewport({ scale: 1 });
         sizes = Array.from({ length: N2 }, () => [vp.width, vp.height]);
         known = new Array(N2).fill(false);
@@ -7091,6 +7307,8 @@ details.more[open] > summary { margin-bottom: .5rem; }
             updateToolbar();
           } else if (k.startsWith("p-")) setPanel(k.slice(2));
           else if (k === "about") hooks.about();
+          else if (k === "tobase") hooks.toBase(entry, notes);
+          else if (k === "delbase") hooks.delFromBase(entry);
           return;
         }
         const pt = ev.target.closest("[data-pt]");
@@ -7217,6 +7435,20 @@ details.more[open] > summary { margin-bottom: .5rem; }
     return {
       openEntry: openEntry2,
       closeDoc,
+      async close() {
+        await closeDoc();
+        updateToolbar();
+        showEmpty();
+      },
+      refreshToolbar() {
+        updateToolbar();
+      },
+      get entry() {
+        return entry;
+      },
+      get notes() {
+        return notes;
+      },
       setActive(a) {
         active = a;
         if (a) {
@@ -7243,11 +7475,13 @@ details.more[open] > summary { margin-bottom: .5rem; }
 
   // src/app/main.js
   var $ = (s, r = document) => r.querySelector(s);
-  var S = { ui: loadSettings(), entries: [], filtered: [], dirHandle: null, dirName: "", readOnly: false, query: "", sort: "name", ctx: null, tab: "chart", gen: 0, remembered: null, selPath: null, mode: "charts", libs: {}, scanning: false, base: { cfg: loadConfig(), loaded: false, loading: false, push: null, throttle: 800 } };
+  var S = { ui: loadSettings(), entries: [], filtered: [], dirHandle: null, dirName: "", readOnly: false, query: "", sort: "name", ctx: null, tab: "chart", gen: 0, remembered: null, selPath: null, mode: "charts", libs: {}, scanning: false, base: { cfg: loadConfig(), loaded: false, loadedPdf: false, loading: false, push: null, throttle: 800 } };
   var LIBFIELDS = ["entries", "filtered", "dirHandle", "dirName", "readOnly", "query", "sort", "remembered", "selPath"];
   var emptyLib = () => ({ entries: [], filtered: [], dirHandle: null, dirName: "", readOnly: false, query: "", sort: "name", remembered: null, selPath: null });
-  var isPdf = () => S.mode === "pdf";
-  var isBase = () => S.mode === "base";
+  var isPdf = () => S.mode === "pdf" || S.mode === "basepdf";
+  var isBase = () => S.mode === "base" || S.mode === "basepdf";
+  var isBaseCharts = () => S.mode === "base";
+  var isBasePdf = () => S.mode === "basepdf";
   var DIRKEY = { charts: "dir", pdf: "dir-pdf" };
   var reader = null;
   var ROW = 46;
@@ -7347,7 +7581,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
     let html = "";
     for (let i = a; i < z; i++) {
       const e2 = S.filtered[i], m = e2.meta;
-      const sub = isPdf() ? e2.bad ? "\u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C" : e2.mtime === void 0 ? "\u2026" : `${fmtSize(e2.size)} \xB7 ${new Date(e2.mtime).toLocaleDateString("ru-RU")}` : e2.bad ? "\u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C" : m ? `${pad(m.d)}.${pad(m.m)}.${m.y}${m.place ? " \xB7 " + m.place : ""}` : "\u2026";
+      const sub = isPdf() ? e2.bad ? "\u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C" : e2.mtime === void 0 ? "\u2026" : e2.mtime === null ? fmtSize(e2.size) : `${fmtSize(e2.size)} \xB7 ${new Date(e2.mtime).toLocaleDateString("ru-RU")}` : e2.bad ? "\u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C" : m ? `${pad(m.d)}.${pad(m.m)}.${m.y}${m.place ? " \xB7 " + m.place : ""}` : "\u2026";
       const dir = e2.dirPath ? `${esc(e2.dirPath)}` : "";
       html += `<button class="row ${e2.path === S.selPath ? "sel" : ""} ${e2.bad ? "bad" : ""}" role="option" data-i="${i}" style="top:${i * ROW}px" title="${esc(e2.path)}"><span class="t">${esc(e2.name.replace(/\.(jhd|pdf)$/i, ""))}</span><span class="s">${esc(sub)}${dir ? " \xB7 " + dir : ""}</span>${isPdf() && e2.hasNotes ? '<span class="nb" title="\u0415\u0441\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0438">\u270E</span>' : ""}</button>`;
     }
@@ -7466,13 +7700,16 @@ details.more[open] > summary { margin-bottom: .5rem; }
     }
   }
   var sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
-  var baseLabel = (cfg) => `${cfg.owner}/${cfg.repo}${cfg.folder ? " \xB7 " + cfg.folder : ""}`;
+  var baseLabel = (cfg, pdf = false) => {
+    const f = pdf ? cfg.pdfFolder : cfg.folder;
+    return `${cfg.owner}/${cfg.repo}${f ? " \xB7 " + f : ""}`;
+  };
   var metaFrom = (b) => ({ y: b.year, m: b.month, d: b.day, time: b.time, place: b.place || "", country: b.country || "", lat: b.lat, lon: b.lonEast });
   function ghFail(e2, what) {
     console.error(e2);
     toast((what ? what + ": " : "") + (e2 && e2.message ? e2.message : e2), true);
   }
-  var baseList = () => isBase() ? S.entries : S.libs.base && S.libs.base.entries || null;
+  var baseList = () => isBaseCharts() ? S.entries : S.libs.base && S.libs.base.entries || null;
   var repoPathOf = (cfg, rel) => (cfg.folder ? cfg.folder + "/" : "") + rel;
   async function baseCfg() {
     const cfg = S.base.cfg;
@@ -7486,15 +7723,17 @@ details.more[open] > summary { margin-bottom: .5rem; }
     return cfg;
   }
   function renderBaseBar() {
-    const fb = $("#folderbar"), b = S.base, cfg = b.cfg, ok = isConfigured(cfg);
+    const fb = $("#folderbar"), b = S.base, cfg = b.cfg, ok = isConfigured(cfg), pdf = isBasePdf(), loaded = pdf ? b.loadedPdf : b.loaded;
+    const kind = `<div class="bkind" role="tablist" aria-label="\u0427\u0442\u043E \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432 \u0431\u0430\u0437\u0435"><button type="button" data-bkind="charts" class="${pdf ? "" : "on"}" role="tab" aria-selected="${!pdf}">\u041A\u0430\u0440\u0442\u044B</button><button type="button" data-bkind="pdf" class="${pdf ? "on" : ""}" role="tab" aria-selected="${pdf}">PDF</button></div>`;
     const btn = (k, label, cls = "", title = "") => `<button class="sbtn ${cls}" data-side="${k}"${title ? ` title="${esc(title)}"` : ""}${b.loading ? " disabled" : ""}>${label}</button>`;
     if (!ok) {
-      fb.innerHTML = `<div class="cur">\u0411\u0430\u0437\u0430 \u043D\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0430</div>${btn("bconf", "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0431\u0430\u0437\u0443\u2026", "primary")}<div class="srow">${btn("new", "\u041D\u043E\u0432\u0430\u044F \u043A\u0430\u0440\u0442\u0430")}${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div>`;
+      fb.innerHTML = kind + `<div class="cur">\u0411\u0430\u0437\u0430 \u043D\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0430</div>${btn("bconf", "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0431\u0430\u0437\u0443\u2026", "primary")}<div class="srow">${pdf ? "" : btn("new", "\u041D\u043E\u0432\u0430\u044F \u043A\u0430\u0440\u0442\u0430")}${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div>`;
       return;
     }
-    const cur = `<div class="cur" title="${esc(baseLabel(cfg))}">\u0411\u0430\u0437\u0430: <b>${esc(baseLabel(cfg))}</b>${b.push === false ? " \xB7 \u0442\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u0435\u043D\u0438\u0435" : ""}</div>`;
-    if (!b.loaded) fb.innerHTML = cur + btn("bopen", b.loading ? "\u041E\u0442\u043A\u0440\u044B\u0432\u0430\u044E\u2026" : "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u0430\u0437\u0443", "primary") + `<div class="srow">${btn("bconf", "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026")}${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div>`;
-    else fb.innerHTML = cur + `<div class="srow">${btn("bopen", "\u21BB \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C", "", "\u041F\u0435\u0440\u0435\u0447\u0438\u0442\u0430\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u0438\u0437 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F")}${btn("bconf", "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026")}</div><div class="srow">${btn("new", "\u041D\u043E\u0432\u0430\u044F \u043A\u0430\u0440\u0442\u0430")}${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div><div class="srow">${btn("bimport", "\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u0430\u0440\u0442\u044B \u0432 \u0431\u0430\u0437\u0443\u2026", "", "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443 .jhd \u0438\u0437 \u043F\u0430\u043F\u043A\u0438 \u043D\u0430 \u044D\u0442\u043E\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435")}</div>`;
+    const cur = `<div class="cur" title="${esc(baseLabel(cfg, pdf))}">\u0411\u0430\u0437\u0430: <b>${esc(baseLabel(cfg, pdf))}</b>${b.push === false ? " \xB7 \u0442\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u0435\u043D\u0438\u0435" : ""}</div>`;
+    if (!loaded) fb.innerHTML = kind + cur + btn("bopen", b.loading ? "\u041E\u0442\u043A\u0440\u044B\u0432\u0430\u044E\u2026" : "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u0430\u0437\u0443", "primary") + `<div class="srow">${btn("bconf", "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026")}${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div>`;
+    else if (pdf) fb.innerHTML = kind + cur + `<div class="srow">${btn("bopen", "\u21BB \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C", "", "\u041F\u0435\u0440\u0435\u0447\u0438\u0442\u0430\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u0438\u0437 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F")}${btn("bconf", "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026")}</div><div class="srow">${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div><div class="srow">${btn("bimport", "\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C PDF \u0432 \u0431\u0430\u0437\u0443\u2026", "", "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443 PDF (\u0438 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u043D\u0438\u043C) \u0438\u0437 \u043F\u0430\u043F\u043A\u0438 \u043D\u0430 \u044D\u0442\u043E\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435")}</div>`;
+    else fb.innerHTML = kind + cur + `<div class="srow">${btn("bopen", "\u21BB \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C", "", "\u041F\u0435\u0440\u0435\u0447\u0438\u0442\u0430\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u0438\u0437 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F")}${btn("bconf", "\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026")}</div><div class="srow">${btn("new", "\u041D\u043E\u0432\u0430\u044F \u043A\u0430\u0440\u0442\u0430")}${btn("file", "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026")}</div><div class="srow">${btn("bimport", "\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u0430\u0440\u0442\u044B \u0432 \u0431\u0430\u0437\u0443\u2026", "", "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443 .jhd \u0438\u0437 \u043F\u0430\u043F\u043A\u0438 \u043D\u0430 \u044D\u0442\u043E\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435")}</div>`;
   }
   async function openBase() {
     const b = S.base;
@@ -7533,8 +7772,9 @@ details.more[open] > summary { margin-bottom: .5rem; }
     const cfg = S.base.cfg || {}, has = isConfigured(cfg);
     dialog(`<h2>\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0431\u0430\u0437\u044B</h2><form class="form" id="bf" method="dialog" autocomplete="off">
     <label class="w6">\u0420\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u043D\u0430 GitHub (\u0432\u043B\u0430\u0434\u0435\u043B\u0435\u0446/\u0438\u043C\u044F)<input name="repo" value="${esc(cfg.owner ? cfg.owner + "/" + cfg.repo : "")}" placeholder="\u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440, ivan/jhd-base" spellcheck="false"></label>
-    <label class="w3">\u041F\u0430\u043F\u043A\u0430 \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438<input name="folder" value="${esc(cfg.folder === void 0 ? "charts" : cfg.folder)}" placeholder="charts (\u043F\u0443\u0441\u0442\u043E \u2014 \u043A\u043E\u0440\u0435\u043D\u044C)" spellcheck="false"></label>
-    <label class="w3">\u0412\u0435\u0442\u043A\u0430<input name="branch" value="${esc(cfg.branch || "")}" placeholder="\u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E" spellcheck="false"></label>
+    <label class="w2">\u041F\u0430\u043F\u043A\u0430 \u0434\u043B\u044F \u043A\u0430\u0440\u0442<input name="folder" value="${esc(cfg.folder === void 0 ? "charts" : cfg.folder)}" placeholder="charts (\u043F\u0443\u0441\u0442\u043E \u2014 \u043A\u043E\u0440\u0435\u043D\u044C)" spellcheck="false"></label>
+    <label class="w2">\u041F\u0430\u043F\u043A\u0430 \u0434\u043B\u044F PDF<input name="pdfFolder" value="${esc(cfg.pdfFolder === void 0 ? "pdf" : cfg.pdfFolder)}" placeholder="pdf (\u043F\u0443\u0441\u0442\u043E \u2014 \u043A\u043E\u0440\u0435\u043D\u044C)" spellcheck="false"></label>
+    <label class="w2">\u0412\u0435\u0442\u043A\u0430<input name="branch" value="${esc(cfg.branch || "")}" placeholder="\u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E" spellcheck="false"></label>
     <label class="w6">\u0422\u043E\u043A\u0435\u043D \u0434\u043E\u0441\u0442\u0443\u043F\u0430<input name="token" type="password" value="${esc(cfg.token || "")}" placeholder="github_pat_\u2026" spellcheck="false" autocomplete="off"></label>
     <label class="chk w6"><input type="checkbox" name="remember" ${cfg.remember === false ? "" : "checked"}> \u0417\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u044C \u0442\u043E\u043A\u0435\u043D \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 (\u0438\u043D\u0430\u0447\u0435 \u0435\u0433\u043E \u043F\u0440\u0438\u0434\u0451\u0442\u0441\u044F \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043F\u0440\u0438 \u043A\u0430\u0436\u0434\u043E\u043C \u0437\u0430\u043F\u0443\u0441\u043A\u0435)</label>
     <p class="hint" id="bmsg">\u0422\u043E\u043A\u0435\u043D \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C \u0442\u0435\u043A\u0441\u0442\u043E\u043C \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 api.github.com. \u0412\u044B\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0435\u0433\u043E \u043D\u0430 \u043E\u0434\u0438\u043D \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u0438 \u043D\u0435 \u0437\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u0439\u0442\u0435 \u043D\u0430 \u0447\u0443\u0436\u043E\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435.</p>
@@ -7543,7 +7783,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       <li>\u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">\u0441\u043E\u0437\u0434\u0430\u043D\u0438\u0435 \u0442\u043E\u043A\u0435\u043D\u0430</a> (Settings \u2192 Developer settings \u2192 Personal access tokens \u2192 Fine-grained tokens \u2192 Generate new token).</li>
       <li>\xABRepository access\xBB \u2192 \xABOnly select repositories\xBB \u2192 \u0432\u0430\u0448 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439. \xABPermissions\xBB \u2192 \xABRepository permissions\xBB \u2192 <b>Contents: Read and write</b>. \u0421\u0440\u043E\u043A \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u044F \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0441\u0430\u043C\u0438.</li>
       <li>\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xABGenerate token\xBB, \u0441\u043A\u043E\u043F\u0438\u0440\u0443\u0439\u0442\u0435 \u0442\u043E\u043A\u0435\u043D (\u043E\u043D \u043F\u043E\u043A\u0430\u0437\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043E\u0434\u0438\u043D \u0440\u0430\u0437) \u0438 \u0432\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0432 \u043F\u043E\u043B\u0435 \u0432\u044B\u0448\u0435.</li>
-      <li>\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C\xBB. \u041A\u0430\u0440\u0442\u044B, \u0443\u0436\u0435 \u043B\u0435\u0436\u0430\u0449\u0438\u0435 \u043D\u0430 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435, \u043C\u043E\u0436\u043D\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u0430\u0440\u0442\u044B \u0432 \u0431\u0430\u0437\u0443\u2026\xBB.</li></ol></details></div>
+      <li>\u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C\xBB. \u041A\u0430\u0440\u0442\u044B \u0438 PDF, \u0443\u0436\u0435 \u043B\u0435\u0436\u0430\u0449\u0438\u0435 \u043D\u0430 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435, \u043C\u043E\u0436\u043D\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u2026 \u0432 \u0431\u0430\u0437\u0443\u2026\xBB (\u0432 \xAB\u0411\u0430\u0437\u0435\xBB \u0435\u0441\u0442\u044C \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF\xBB).</li></ol></details></div>
     </form><div class="dlg-actions">${has ? '<button class="btn" id="bforget" type="button">\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0438 \u0437\u0430\u0431\u044B\u0442\u044C \u0442\u043E\u043A\u0435\u043D</button>' : ""}<button class="btn" data-close type="button">\u041E\u0442\u043C\u0435\u043D\u0430</button><button class="btn primary" id="bok" type="button">\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C</button></div>`, (d) => {
       const f = $("#bf", d), msg = $("#bmsg", d), say = (t, err2 = false) => {
         msg.textContent = t;
@@ -7553,10 +7793,12 @@ details.more[open] > summary { margin-bottom: .5rem; }
         const rr = parseRepo(f.repo.value);
         if (!rr) return say("\u0420\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u0443\u043A\u0430\u0436\u0438\u0442\u0435 \u043A\u0430\u043A \xAB\u0432\u043B\u0430\u0434\u0435\u043B\u0435\u0446/\u0438\u043C\u044F\xBB, \u043D\u0430\u043F\u0440\u0438\u043C\u0435\u0440 ivan/jhd-base.", true);
         const folder = normFolder(f.folder.value);
-        if (folder === null) return say("\u041F\u0430\u043F\u043A\u0430 \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438: \u0431\u0435\u0437 \xAB..\xBB \u0438 \u0431\u0435\u0437 \xAB.git\xBB.", true);
+        if (folder === null) return say("\u041F\u0430\u043F\u043A\u0430 \u0434\u043B\u044F \u043A\u0430\u0440\u0442: \u0431\u0435\u0437 \xAB..\xBB \u0438 \u0431\u0435\u0437 \xAB.git\xBB.", true);
+        const pdfFolder = normFolder(f.pdfFolder.value);
+        if (pdfFolder === null) return say("\u041F\u0430\u043F\u043A\u0430 \u0434\u043B\u044F PDF: \u0431\u0435\u0437 \xAB..\xBB \u0438 \u0431\u0435\u0437 \xAB.git\xBB.", true);
         const token = f.token.value.trim();
         if (!token) return say("\u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0442\u043E\u043A\u0435\u043D \u0434\u043E\u0441\u0442\u0443\u043F\u0430.", true);
-        const nc = { ...rr, branch: f.branch.value.trim(), folder, remember: f.remember.checked, token };
+        const nc = { ...rr, branch: f.branch.value.trim(), folder, pdfFolder, remember: f.remember.checked, token };
         const ok = $("#bok", d);
         ok.disabled = true;
         say("\u041F\u0440\u043E\u0432\u0435\u0440\u044F\u044E \u0434\u043E\u0441\u0442\u0443\u043F\u2026");
@@ -7568,10 +7810,12 @@ details.more[open] > summary { margin-bottom: .5rem; }
           S.base.cfg = nc;
           S.base.push = info.push;
           S.base.loaded = false;
+          S.base.loadedPdf = false;
           S.base.loading = false;
           d.close();
           toast(`\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u043E: ${nc.owner}/${nc.repo}, \u043A\u0430\u0440\u0442 \u0432 \u043F\u0430\u043F\u043A\u0435: ${r.entries.length}${info.push === false ? ". \u0422\u043E\u043A\u0435\u043D \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0447\u0442\u0435\u043D\u0438\u044F: \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0442\u044C \u0432 \u0431\u0430\u0437\u0443 \u043D\u0435 \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u0441\u044F" : ""}`, info.push === false);
-          if (isBase()) await openBase();
+          if (reader) reader.refreshToolbar();
+          if (isBase()) await openBaseCurrent();
           else {
             renderTop();
           }
@@ -7584,7 +7828,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       if (fg) fg.addEventListener("click", async () => {
         if (!await confirmDialog("\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0431\u0430\u0437\u0443?", "\u0422\u043E\u043A\u0435\u043D \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0451\u043D \u0438\u0437 \u044D\u0442\u043E\u0433\u043E \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430. \u041A\u0430\u0440\u0442\u044B \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 \u043E\u0441\u0442\u0430\u044E\u0442\u0441\u044F \u043D\u0430 \u043C\u0435\u0441\u0442\u0435.", "\u041E\u0442\u043A\u043B\u044E\u0447\u0438\u0442\u044C")) return;
         clearConfig();
-        S.base = { cfg: null, loaded: false, loading: false, push: null, throttle: 800 };
+        S.base = { cfg: null, loaded: false, loadedPdf: false, loading: false, push: null, throttle: 800 };
         if (S.ctx && S.ctx.entry && S.ctx.entry.remote) {
           S.ctx = null;
           S.selPath = null;
@@ -7596,8 +7840,15 @@ details.more[open] > summary { margin-bottom: .5rem; }
           applyFilter();
           renderFolderBar();
           renderView();
-        } else if (S.libs.base) S.libs.base = emptyLib();
+          if (reader) {
+            if (reader.entry && reader.entry.remote) reader.close();
+            else reader.refreshEmpty();
+          }
+        }
+        if (!isBaseCharts() && S.libs.base) S.libs.base = emptyLib();
+        if (!isBasePdf() && S.libs.basepdf) S.libs.basepdf = emptyLib();
         renderTop();
+        if (reader) reader.refreshToolbar();
         toast("\u0411\u0430\u0437\u0430 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u0430, \u0442\u043E\u043A\u0435\u043D \u0443\u0434\u0430\u043B\u0451\u043D");
       });
     });
@@ -7612,7 +7863,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
     const i = list.findIndex((x) => x.path === entry.path);
     if (i >= 0) list[i] = entry;
     else list.push(entry);
-    if (isBase()) applyFilter();
+    if (isBaseCharts()) applyFilter();
   }
   function baseSaveDialog(title) {
     const c = S.ctx;
@@ -7648,7 +7899,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
           const res = await putFile(cfg, repoPathOf(cfg, rel), enc2.bytes, sha, `${sha ? "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0430" : "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0430"} \u043A\u0430\u0440\u0442\u0430: ${name.replace(/\.jhd$/i, "")}`);
           const entry = { name, path: rel, dirPath: folder ? folder + "/" : "", remote: { path: repoPathOf(cfg, rel), sha: res.sha, size: enc2.bytes.length }, meta: metaFrom(c.birth) };
           placeInList(entry);
-          if (isBase()) {
+          if (isBaseCharts()) {
             c.entry = entry;
             c.birth.name = name.replace(/\.jhd$/i, "");
             c.dirty = false;
@@ -7696,6 +7947,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
     }
   }
   async function importToBase() {
+    if (isBasePdf()) return importPdfToBase();
     if (!isConfigured(S.base.cfg)) {
       baseDialog();
       return;
@@ -7787,6 +8039,333 @@ details.more[open] > summary { margin-bottom: .5rem; }
       });
     });
   }
+  var utf8e = new TextEncoder();
+  var utf8d = new TextDecoder("utf-8");
+  var pdfRepoPath = (cfg, rel) => (cfg.pdfFolder ? cfg.pdfFolder + "/" : "") + rel;
+  var basePdfList = () => isBasePdf() ? S.entries : S.libs.basepdf && S.libs.basepdf.entries || null;
+  var openBaseCurrent = () => isBasePdf() ? openBasePdf() : openBase();
+  var stem = (n) => n.replace(/\.pdf$/i, "");
+  function pdfIO(entry) {
+    return {
+      canWrite: () => S.base.push !== false,
+      async readNotes(fresh) {
+        const cfg = await baseCfg();
+        if (fresh) {
+          const p = entry.remote.path + NOTES_SUFFIX, sha = await getFileSha(cfg, p);
+          entry.sidecar = sha ? { path: p, sha, size: 0 } : null;
+        }
+        if (!entry.sidecar) return null;
+        return utf8d.decode(await readBlob(cfg, entry.sidecar.sha));
+      },
+      async writeNotes(text) {
+        const cfg = await baseCfg(), p = entry.remote.path + NOTES_SUFFIX, bytes = utf8e.encode(text);
+        const res = await putFile(cfg, p, bytes, entry.sidecar ? entry.sidecar.sha : null, `\u0417\u0430\u043C\u0435\u0442\u043A\u0438: ${stem(entry.name)}`);
+        entry.sidecar = { path: p, sha: res.sha, size: bytes.length };
+        if (!entry.hasNotes) {
+          entry.hasNotes = true;
+          renderList();
+        }
+      }
+    };
+  }
+  async function openBasePdf() {
+    const b = S.base;
+    if (!isConfigured(b.cfg)) {
+      baseDialog();
+      return;
+    }
+    if (b.loading) return;
+    b.loading = true;
+    renderFolderBar();
+    renderFoot("\u0447\u0438\u0442\u0430\u044E \u0431\u0430\u0437\u0443\u2026");
+    try {
+      const cfg = await baseCfg();
+      const r = await listPdfs(cfg, { onWait: (w) => renderFoot(`GitHub \u043F\u0440\u043E\u0441\u0438\u0442 \u043F\u043E\u0434\u043E\u0436\u0434\u0430\u0442\u044C ${w} \u0441\u2026`) });
+      b.loadedPdf = true;
+      b.loading = false;
+      S.dirHandle = null;
+      S.dirName = baseLabel(cfg, true);
+      S.readOnly = b.push === false;
+      S.remembered = null;
+      if (r.truncated) toast("\u0421\u043F\u0438\u0441\u043E\u043A \u043E\u0431\u0440\u0435\u0437\u0430\u043D GitHub (\u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 \u0431\u043E\u043B\u044C\u0448\u0435 100 000 \u0444\u0430\u0439\u043B\u043E\u0432): \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0431\u0430\u0437\u0443 \u0432 \u043F\u0430\u043F\u043A\u0435 \u043F\u043E\u043C\u0435\u043D\u044C\u0448\u0435.", true);
+      else if (r.repoBytes > REPO_WARN) toast(`\u0412 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 \u0443\u0436\u0435 ${fmtSize(r.repoBytes)}: GitHub \u0441\u043E\u0432\u0435\u0442\u0443\u0435\u0442 \u0434\u0435\u0440\u0436\u0430\u0442\u044C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u0434\u043E 1 \u0413\u0411. \u0421\u0442\u0430\u0440\u044B\u0435 \u0438\u043B\u0438 \u043D\u0435\u043D\u0443\u0436\u043D\u044B\u0435 PDF \u043B\u0443\u0447\u0448\u0435 \u0443\u0434\u0430\u043B\u0438\u0442\u044C.`, true);
+      for (const e2 of r.entries) e2.io = pdfIO(e2);
+      const total = r.entries.reduce((a, e2) => a + e2.size, 0);
+      await onEntries(r.entries, r.entries.length ? fmtSize(total) : "\u0432 \u0431\u0430\u0437\u0435 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 PDF");
+    } catch (e2) {
+      b.loading = false;
+      renderFolderBar();
+      renderFoot("");
+      ghFail(e2, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u0430\u0437\u0443");
+    }
+  }
+  function placePdf(entry) {
+    const list = basePdfList();
+    if (!list) return;
+    const i = list.findIndex((x) => x.path === entry.path);
+    if (i >= 0) list[i] = entry;
+    else list.push(entry);
+    if (isBasePdf()) {
+      applyFilter();
+      if (reader) reader.refreshEmpty();
+    }
+  }
+  function baseEmptyPdf() {
+    if (!isBasePdf()) return null;
+    const b = S.base, ok = isConfigured(b.cfg);
+    if (ok && b.loadedPdf) return `<div class="pdfhello"><h2>\u0411\u0430\u0437\u0430 PDF \u043E\u0442\u043A\u0440\u044B\u0442\u0430</h2><p>PDF \u0432 \u0441\u043F\u0438\u0441\u043A\u0435: ${S.entries.length}. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0444\u0430\u0439\u043B \u0441\u043B\u0435\u0432\u0430: \u043E\u043D \u0441\u043A\u0430\u0447\u0430\u0435\u0442\u0441\u044F \u0438\u0437 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F \u0438 \u043E\u0442\u043A\u0440\u043E\u0435\u0442\u0441\u044F, \u0430 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u0431\u0443\u0434\u0443\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u0442\u044C\u0441\u044F \u0440\u044F\u0434\u043E\u043C \u0441 \u043D\u0438\u043C.</p></div>`;
+    return `<div class="pdfhello"><h2>${ok ? "\u0411\u0430\u0437\u0430 PDF" : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0431\u0430\u0437\u0443"}</h2>
+    <p>PDF-\u0444\u0430\u0439\u043B\u044B \u0438 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u043D\u0438\u043C \u043B\u0435\u0436\u0430\u0442 \u0432 \u0432\u0430\u0448\u0435\u043C \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 \u043D\u0430 GitHub \u0438 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0441\u043F\u0438\u0441\u043A\u043E\u043C \u0441 \u043B\u044E\u0431\u043E\u0433\u043E \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0430. \u0422\u043E\u043A\u0435\u043D \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 GitHub.</p>
+    <div class="actions">${ok ? '<button class="btn primary" data-side="bopen">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u0430\u0437\u0443</button><button class="btn" data-side="bconf">\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026</button>' : '<button class="btn primary" data-side="bconf">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0431\u0430\u0437\u0443\u2026</button>'}<button class="btn" data-side="file">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0444\u0430\u0439\u043B\u2026</button></div>
+    <ul><li>\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0443\u0436\u0435 \u0438\u043C\u0435\u044E\u0449\u0438\u0435\u0441\u044F PDF \u043C\u043E\u0436\u043D\u043E \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C PDF \u0432 \u0431\u0430\u0437\u0443\u2026\xBB (\u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u044F \u0431\u0430\u0437\u044B), \u043E\u0434\u0438\u043D \u0444\u0430\u0439\u043B \u2014 \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0412 \u0431\u0430\u0437\u0443\xBB \u0432 \u043F\u0430\u043D\u0435\u043B\u0438 \u0447\u0438\u0442\u0430\u043B\u043A\u0438.</li>
+    <li>\u0424\u0430\u0439\u043B \u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044F \u0446\u0435\u043B\u0438\u043A\u043E\u043C \u043F\u043E\u0441\u043B\u0435 \u0441\u043A\u0430\u0447\u0438\u0432\u0430\u043D\u0438\u044F \u0438 \u0437\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u0435\u0442\u0441\u044F \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 (\u0434\u043E ~400 \u041C\u0411), \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443.</li>
+    <li>\u0424\u0430\u0439\u043B\u044B \u0431\u043E\u043B\u044C\u0448\u0435 ${fmtSize(MAX_UPLOAD)} \u0432 \u0431\u0430\u0437\u0443 \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F.</li></ul></div>`;
+  }
+  async function pdfToBase(entry, notes) {
+    const cs = S.base.cfg;
+    if (!isConfigured(cs)) {
+      baseDialog();
+      return;
+    }
+    let file;
+    try {
+      file = entry.handle ? await entry.handle.getFile() : entry.file;
+    } catch (e2) {
+      ghFail(e2, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0444\u0430\u0439\u043B");
+      return;
+    }
+    if (!file) return;
+    if (file.size > MAX_UPLOAD) {
+      toast(`\xAB${entry.name}\xBB \u2014 ${fmtSize(file.size)}. \u0424\u0430\u0439\u043B\u044B \u0431\u043E\u043B\u044C\u0448\u0435 ${fmtSize(MAX_UPLOAD)} \u0432 \u0431\u0430\u0437\u0443 \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F: \u0441\u043E\u0436\u043C\u0438\u0442\u0435 PDF \u0438\u043B\u0438 \u0440\u0430\u0437\u0434\u0435\u043B\u0438\u0442\u0435 \u043D\u0430 \u0447\u0430\u0441\u0442\u0438.`, true);
+      return;
+    }
+    const hasNotes = !!(notes && notes.list.length), sub = (entry.dirPath || "").replace(/\/$/, "");
+    dialog(`<h2>\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C PDF \u0432 \u0431\u0430\u0437\u0443</h2><form class="form" method="dialog" id="pf"><label class="w4">\u0418\u043C\u044F \u0444\u0430\u0439\u043B\u0430<input name="n" value="${esc(entry.name)}" autocomplete="off"></label>
+    <label class="w2">\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430<input name="sub" value="${esc(sub)}" placeholder="(\u043A\u043E\u0440\u0435\u043D\u044C)" autocomplete="off"></label>
+    ${hasNotes ? `<label class="chk w6"><input type="checkbox" name="withnotes" checked> \u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u0437\u0430\u043C\u0435\u0442\u043A\u0430\u043C\u0438 (${notes.list.length}); \u0435\u0441\u043B\u0438 \u0432 \u0431\u0430\u0437\u0435 \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u044D\u0442\u043E\u043C\u0443 \u0444\u0430\u0439\u043B\u0443, \u043E\u043D\u0438 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u044F\u0442\u0441\u044F</label>` : ""}
+    <p class="hint">\xAB${esc(entry.name)}\xBB, ${fmtSize(file.size)}, \u0431\u0443\u0434\u0435\u0442 \u0437\u0430\u043F\u0438\u0441\u0430\u043D \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 <b>${esc(baseLabel(cs, true))}</b> \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043A\u043E\u043C\u043C\u0438\u0442\u043E\u043C; \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043E\u0441\u0442\u0430\u044E\u0442\u0441\u044F \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 GitHub.</p></form>
+    <div class="dlg-actions"><button class="btn" data-close type="button">\u041E\u0442\u043C\u0435\u043D\u0430</button><button class="btn primary" id="pok" type="button">\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443</button></div>`, (d) => {
+      $("#pok", d).addEventListener("click", async () => {
+        const f = $("#pf", d), ok = $("#pok", d);
+        let name = safeName(f.n.value);
+        if (!name) return;
+        if (!/\.pdf$/i.test(name)) name += ".pdf";
+        const folder = normFolder(f.sub.value);
+        if (folder === null) {
+          toast("\u041F\u043E\u0434\u043F\u0430\u043F\u043A\u0430 \u0443\u043A\u0430\u0437\u0430\u043D\u0430 \u043D\u0435\u0432\u0435\u0440\u043D\u043E (\u0431\u0435\u0437 \xAB..\xBB).", true);
+          return;
+        }
+        const rel = (folder ? folder + "/" : "") + name;
+        ok.disabled = true;
+        try {
+          const cfg = await baseCfg(), known = (basePdfList() || []).find((x) => x.path === rel), rpath = pdfRepoPath(cfg, rel);
+          const sha = known ? known.remote.sha : await getFileSha(cfg, rpath);
+          ok.textContent = "\u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u2026";
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let remote;
+          if (sha && sha === await gitBlobSha(bytes)) remote = { path: rpath, sha, size: bytes.length };
+          else {
+            if (sha && !await confirmDialog("\u0422\u0430\u043A\u043E\u0439 PDF \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u0432 \u0431\u0430\u0437\u0435", `\xAB${rel}\xBB \u0431\u0443\u0434\u0435\u0442 \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0438\u0441\u0430\u043D (\u043F\u0440\u0435\u0436\u043D\u044F\u044F \u0432\u0435\u0440\u0441\u0438\u044F \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 GitHub).`, "\u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C")) {
+              ok.disabled = false;
+              ok.textContent = "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443";
+              return;
+            }
+            const res = await putFile(cfg, rpath, bytes, sha, `${sha ? "\u041E\u0431\u043D\u043E\u0432\u043B\u0451\u043D" : "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D"} PDF: ${stem(name)}`, { onWait: (w) => {
+              ok.textContent = `\u0416\u0434\u0443 ${w} \u0441\u2026`;
+            } });
+            remote = { path: rpath, sha: res.sha, size: bytes.length };
+          }
+          let sidecar = known ? known.sidecar : null, note = "";
+          if (f.withnotes && f.withnotes.checked) {
+            const sp = rpath + NOTES_SUFFIX, ssha = sidecar ? sidecar.sha : await getFileSha(cfg, sp);
+            let list = notes.list;
+            if (ssha) {
+              let rd;
+              try {
+                rd = JSON.parse(utf8d.decode(await readBlob(cfg, ssha)));
+              } catch {
+                rd = null;
+              }
+              if (!rd || !Array.isArray(rd.notes)) throw new Error("PDF \u0437\u0430\u043F\u0438\u0441\u0430\u043D, \u043D\u043E \u0444\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0432 \u0431\u0430\u0437\u0435 \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D \u0438 \u043D\u0435 \u0431\u0443\u0434\u0435\u0442 \u043F\u0435\u0440\u0435\u0437\u0430\u043F\u0438\u0441\u0430\u043D.");
+              list = mergeNoteLists(list, rd.notes);
+            }
+            const sb = utf8e.encode(JSON.stringify({ ...notes.toJSON(), file: name, notes: list }, null, 1)), r2 = await putFile(cfg, sp, sb, ssha, `\u0417\u0430\u043C\u0435\u0442\u043A\u0438: ${stem(name)}`);
+            sidecar = { path: sp, sha: r2.sha, size: sb.length };
+            note = " \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u0437\u0430\u043C\u0435\u0442\u043A\u0430\u043C\u0438";
+          }
+          const ne = { name, path: rel, dirPath: folder ? folder + "/" : "", size: bytes.length, mtime: null, hasNotes: !!sidecar, remote, sidecar };
+          ne.io = pdfIO(ne);
+          placePdf(ne);
+          toast(`\u0417\u0430\u043F\u0438\u0441\u0430\u043D\u043E \u0432 \u0431\u0430\u0437\u0443${note}: ${rel}`);
+          d.close();
+        } catch (e2) {
+          ghFail(e2, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443");
+          ok.disabled = false;
+          ok.textContent = "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443";
+        }
+      });
+    });
+  }
+  async function pdfFromBase(entry) {
+    if (!entry || !entry.remote) return;
+    if (!await confirmDialog("\u0423\u0434\u0430\u043B\u0438\u0442\u044C PDF \u0438\u0437 \u0431\u0430\u0437\u044B?", `\xAB${entry.path}\xBB${entry.sidecar || entry.hasNotes ? " \u0438 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u043D\u0435\u043C\u0443" : ""} \u0431\u0443\u0434\u0435\u0442 \u0443\u0434\u0430\u043B\u0451\u043D \u0438\u0437 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F ${baseLabel(S.base.cfg, true)}. \u041D\u0430 GitHub \u0435\u0433\u043E \u043C\u043E\u0436\u043D\u043E \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0438\u0437 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u043A\u043E\u043C\u043C\u0438\u0442\u043E\u0432.`, "\u0423\u0434\u0430\u043B\u0438\u0442\u044C")) return;
+    try {
+      if (reader && reader.entry === entry) await reader.close();
+      const cfg = await baseCfg();
+      await deleteFile(cfg, entry.remote.path, entry.remote.sha, `\u0423\u0434\u0430\u043B\u0451\u043D PDF: ${stem(entry.name)}`);
+      let note = "";
+      if (entry.sidecar) {
+        try {
+          await deleteFile(cfg, entry.sidecar.path, entry.sidecar.sha, `\u0423\u0434\u0430\u043B\u0435\u043D\u044B \u0437\u0430\u043C\u0435\u0442\u043A\u0438: ${stem(entry.name)}`);
+        } catch (e2) {
+          note = " \u0424\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0443\u0434\u0430\u043B\u0438\u0442\u044C \u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C: " + e2.message;
+        }
+      }
+      const list = basePdfList();
+      if (list) {
+        const i = list.findIndex((x) => x.remote && x.remote.path === entry.remote.path);
+        if (i >= 0) list.splice(i, 1);
+      }
+      S.selPath = null;
+      if (isBasePdf()) {
+        applyFilter();
+        if (reader) reader.refreshEmpty();
+      }
+      toast(`\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0438\u0437 \u0431\u0430\u0437\u044B: ${entry.name}.${note}`, !!note);
+    } catch (err2) {
+      ghFail(err2, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0443\u0434\u0430\u043B\u0438\u0442\u044C");
+    }
+  }
+  async function pdfItemsFromEntries(ents) {
+    const items = [], bytesOf = async (f) => new Uint8Array(await f.arrayBuffer());
+    for (const e2 of ents) {
+      const getF = async () => e2.handle ? e2.handle.getFile() : e2.file, f = await getF();
+      items.push({ path: e2.path, size: f.size, read: async () => bytesOf(await getF()) });
+      if (e2.hasNotes) {
+        const getS = async () => e2.dir ? (await e2.dir.getFileHandle(e2.name + NOTES_SUFFIX2)).getFile() : e2.sidecarFile, sf = await getS();
+        items.push({ path: e2.path + NOTES_SUFFIX2, size: sf.size, notes: true, read: async () => bytesOf(await getS()) });
+      }
+    }
+    return items;
+  }
+  async function importPdfToBase() {
+    if (!isConfigured(S.base.cfg)) {
+      baseDialog();
+      return;
+    }
+    if (!hasFSA) {
+      $("#fimp").click();
+      return;
+    }
+    try {
+      const h = await window.showDirectoryPicker({ id: "pdf-import" });
+      renderFoot("\u0447\u0438\u0442\u0430\u044E \u043F\u0430\u043F\u043A\u0443\u2026");
+      const ents = await scanPdfDirectory(h);
+      await planImportPdf(await pdfItemsFromEntries(ents));
+    } catch (e2) {
+      renderFoot("");
+      if (e2.name !== "AbortError") ghFail(e2, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u043F\u0430\u043F\u043A\u0443");
+    }
+  }
+  async function planImportPdf(items) {
+    const pdfs = items.filter((i) => !i.notes);
+    if (!pdfs.length) {
+      toast("\u0412 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u043E\u0439 \u043F\u0430\u043F\u043A\u0435 \u043D\u0435\u0442 \u0444\u0430\u0439\u043B\u043E\u0432 .pdf (\u0432\u043B\u043E\u0436\u0435\u043D\u043D\u044B\u0435 \u043F\u0430\u043F\u043A\u0438 \u0442\u043E\u0436\u0435 \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u044B).", true);
+      return;
+    }
+    let cfg, plan;
+    try {
+      cfg = await baseCfg();
+      const rmap = (await listPdfs(cfg)).files;
+      plan = { fresh: [], same: 0, diff: [], big: [], nfresh: [], nsame: 0, ndiff: 0 };
+      let n = 0;
+      const bigPaths = /* @__PURE__ */ new Set();
+      for (const it of pdfs) {
+        renderFoot(`\u0441\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u044E \u0441 \u0431\u0430\u0437\u043E\u0439\u2026 ${++n} \u0438\u0437 ${items.length}`);
+        const have = rmap.get(it.path);
+        if (it.size > MAX_UPLOAD) {
+          plan.big.push(it);
+          bigPaths.add(it.path);
+          continue;
+        }
+        if (have === void 0) {
+          plan.fresh.push(it);
+          continue;
+        }
+        if (have.size === it.size && await gitBlobSha(await it.read()) === have.sha) plan.same++;
+        else plan.diff.push({ ...it, sha: have.sha });
+      }
+      for (const it of items.filter((i) => i.notes)) {
+        renderFoot(`\u0441\u0440\u0430\u0432\u043D\u0438\u0432\u0430\u044E \u0441 \u0431\u0430\u0437\u043E\u0439\u2026 ${++n} \u0438\u0437 ${items.length}`);
+        if (bigPaths.has(it.path.slice(0, it.path.length - NOTES_SUFFIX2.length))) continue;
+        const have = rmap.get(it.path);
+        if (have === void 0) plan.nfresh.push(it);
+        else if (have.size === it.size && await gitBlobSha(await it.read()) === have.sha) plan.nsame++;
+        else plan.ndiff++;
+      }
+      renderFoot("");
+    } catch (e2) {
+      renderFoot("");
+      ghFail(e2, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u0440\u0430\u0432\u043D\u0438\u0442\u044C \u0441 \u0431\u0430\u0437\u043E\u0439");
+      return;
+    }
+    const sum = (a) => a.reduce((x, i) => x + i.size, 0);
+    const d = dialog(`<h2>\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C PDF \u0432 \u0431\u0430\u0437\u0443</h2>
+    <p>\u041D\u0430\u0439\u0434\u0435\u043D\u043E PDF: <b>${pdfs.length}</b>. \u041D\u043E\u0432\u044B\u0445: <b>${plan.fresh.length}</b>${plan.fresh.length ? ` (${fmtSize(sum(plan.fresh))})` : ""}. \u0423\u0436\u0435 \u0432 \u0431\u0430\u0437\u0435 \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439: <b>${plan.same}</b>. \u041E\u0442\u043B\u0438\u0447\u0430\u044E\u0442\u0441\u044F \u043E\u0442 \u0432\u0435\u0440\u0441\u0438\u0438 \u0432 \u0431\u0430\u0437\u0435: <b>${plan.diff.length}</b>.${plan.big.length ? ` \u0421\u043B\u0438\u0448\u043A\u043E\u043C \u0431\u043E\u043B\u044C\u0448\u0438\u0435 (\u0431\u043E\u043B\u044C\u0448\u0435 ${fmtSize(MAX_UPLOAD)}), \u043D\u0435 \u0431\u0443\u0434\u0443\u0442 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u044B: <b>${plan.big.length}</b> \u2014 ${esc(plan.big.slice(0, 3).map((i) => i.path).join(", "))}${plan.big.length > 3 ? "\u2026" : ""}.` : ""}</p>
+    <p>\u0424\u0430\u0439\u043B\u043E\u0432 \u0437\u0430\u043C\u0435\u0442\u043E\u043A: \u043D\u043E\u0432\u044B\u0445 <b>${plan.nfresh.length}</b>, \u0443\u0436\u0435 \u0432 \u0431\u0430\u0437\u0435 \u0431\u0435\u0437 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 <b>${plan.nsame}</b>${plan.ndiff ? `, \u043E\u0442\u043B\u0438\u0447\u0430\u044E\u0449\u0438\u0445\u0441\u044F <b>${plan.ndiff}</b> (\u0438\u0445 \u044F \u043D\u0435 \u0442\u0440\u043E\u0433\u0430\u044E: \u0432 \u0431\u0430\u0437\u0435 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u0443\u0436\u0435 \u0435\u0441\u0442\u044C, \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u0438\u0442\u044C \u043C\u043E\u0436\u043D\u043E, \u043E\u0442\u043A\u0440\u044B\u0432 PDF \u0438 \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u0432 \u0444\u0430\u0439\u043B \u0432 \u043F\u0430\u043D\u0435\u043B\u0438 \xAB\u0417\u0430\u043C\u0435\u0442\u043A\u0438\xBB)` : ""}.</p>
+    ${plan.diff.length ? `<label class="chk"><input type="checkbox" id="idiff"> \u0417\u0430\u043C\u0435\u043D\u0438\u0442\u044C \u0432 \u0431\u0430\u0437\u0435 \u043E\u0442\u043B\u0438\u0447\u0430\u044E\u0449\u0438\u0435\u0441\u044F PDF (${plan.diff.length}); \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043E\u0441\u0442\u0430\u043D\u0443\u0442\u0441\u044F \u0432 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 GitHub</label>` : ""}
+    <p class="hint">\u041A\u0430\u0436\u0434\u044B\u0439 \u0444\u0430\u0439\u043B \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u043A\u043E\u043C\u043C\u0438\u0442\u043E\u043C. \u0411\u043E\u043B\u044C\u0448\u0438\u0435 PDF \u043F\u0435\u0440\u0435\u0434\u0430\u044E\u0442\u0441\u044F \u0434\u043E\u043B\u0433\u043E (\u0437\u0430\u0432\u0438\u0441\u0438\u0442 \u043E\u0442 \u0432\u0430\u0448\u0435\u0433\u043E \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0430); GitHub \u043C\u043E\u0436\u0435\u0442 \u043F\u043E\u043F\u0440\u043E\u0441\u0438\u0442\u044C \u043F\u043E\u0434\u043E\u0436\u0434\u0430\u0442\u044C. \u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0443 \u043C\u043E\u0436\u043D\u043E \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0438 \u043F\u043E\u0437\u0436\u0435 \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u044C \u0441\u043D\u043E\u0432\u0430: \u0443\u0436\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043D\u044B\u0435 \u0444\u0430\u0439\u043B\u044B \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u044E\u0442\u0441\u044F. \u041D\u0435 \u0437\u0430\u043A\u0440\u044B\u0432\u0430\u0439\u0442\u0435 \u0432\u043A\u043B\u0430\u0434\u043A\u0443, \u043F\u043E\u043A\u0430 \u0438\u0434\u0451\u0442 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430.</p>
+    <div class="prog" id="iprog" hidden><div class="bar"><i id="ibar"></i></div><span id="itxt"></span></div>
+    <div class="dlg-actions"><button class="btn" id="istop" type="button">\u0417\u0430\u043A\u0440\u044B\u0442\u044C</button><button class="btn primary" id="igo" type="button" ${plan.fresh.length || plan.diff.length || plan.nfresh.length ? "" : "disabled"}>\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C</button></div>`, (dd) => {
+      let stop = false, running = false;
+      $("#istop", dd).addEventListener("click", () => {
+        if (running) stop = true;
+        else dd.close();
+      });
+      dd.addEventListener("close", () => {
+        stop = true;
+      }, { once: true });
+      $("#igo", dd).addEventListener("click", async () => {
+        if (running) return;
+        running = true;
+        const todo = plan.fresh.concat($("#idiff", dd) && $("#idiff", dd).checked ? plan.diff : [], plan.nfresh), total = Math.max(1, sum(todo));
+        $("#igo", dd).disabled = true;
+        $("#iprog", dd).hidden = false;
+        $("#istop", dd).textContent = "\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C";
+        let n = 0, done = 0, err2 = null;
+        for (const it of todo) {
+          if (stop) break;
+          const t0 = Date.now();
+          $("#itxt", dd).textContent = `\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u044E ${n + 1} \u0438\u0437 ${todo.length}: ${it.path} (${fmtSize(it.size)})\u2026`;
+          try {
+            const bytes = await it.read();
+            await putFile(cfg, pdfRepoPath(cfg, it.path), bytes, it.sha || null, it.notes ? `\u0417\u0430\u043C\u0435\u0442\u043A\u0438: ${stem(it.path.slice(0, it.path.length - NOTES_SUFFIX2.length))}` : `${it.sha ? "\u041E\u0431\u043D\u043E\u0432\u043B\u0451\u043D" : "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D"} PDF: ${stem(it.path)}`, { onWait: (w) => {
+              $("#itxt", dd).textContent = `GitHub \u043F\u0440\u043E\u0441\u0438\u0442 \u043F\u043E\u0434\u043E\u0436\u0434\u0430\u0442\u044C ${w} \u0441\u2026`;
+            } });
+          } catch (e2) {
+            err2 = e2;
+            break;
+          }
+          n++;
+          done += it.size;
+          $("#ibar", dd).style.width = 100 * done / total + "%";
+          const rest = S.base.throttle - (Date.now() - t0);
+          if (rest > 0) await sleep2(rest);
+        }
+        running = false;
+        $("#istop", dd).textContent = "\u0417\u0430\u043A\u0440\u044B\u0442\u044C";
+        if (dd.open) {
+          $("#itxt", dd).textContent = err2 ? `\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E: \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E ${n} \u0438\u0437 ${todo.length}. ${err2.message}` : stop ? `\u041E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043E: \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E ${n} \u0438\u0437 ${todo.length}.` : `\u0413\u043E\u0442\u043E\u0432\u043E: \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E \u0444\u0430\u0439\u043B\u043E\u0432 ${n}.`;
+          if (err2) $("#itxt", dd).className = "err";
+        }
+        if (n) {
+          toast(`\u0412 \u0431\u0430\u0437\u0443 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E \u0444\u0430\u0439\u043B\u043E\u0432: ${n}`);
+          if (isBasePdf()) openBasePdf();
+          else S.base.loadedPdf = false;
+        }
+      });
+    });
+  }
   function mkSt() {
     const u = S.ui;
     return { ...DEFAULT_SETTINGS, ayanamsa: +u.ayanamsa, trueNode: !!u.trueNode, houseSystem: u.houseSystem, yearLen: +u.yearLen, sunriseCenter: !!u.sunriseCenter, karakas: +u.karakas, charaDir: u.charaDir === "lagna" ? "lagna" : "ninth", charaExaltAdj: !!u.charaExaltAdj };
@@ -7851,7 +8430,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
     $("#tabs").innerHTML = S.ctx ? TABS.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}" role="tab" aria-selected="${S.tab === k}">${l}</button>`).join("") : "";
   }
   function emptyState() {
-    if (isBase()) {
+    if (isBaseCharts()) {
       const b = S.base, ok = isConfigured(b.cfg);
       if (ok && b.loaded) return `<div class="empty"><h2>\u0411\u0430\u0437\u0430 \u043E\u0442\u043A\u0440\u044B\u0442\u0430</h2><p>\u041A\u0430\u0440\u0442 \u0432 \u0441\u043F\u0438\u0441\u043A\u0435: ${S.entries.length}. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u043A\u0430\u0440\u0442\u0443 \u0441\u043B\u0435\u0432\u0430 \u2014 \u0441\u043F\u0438\u0441\u043E\u043A \u043C\u043E\u0436\u043D\u043E \u0438\u0441\u043A\u0430\u0442\u044C \u043F\u043E \u0438\u043C\u0435\u043D\u0438, \u0433\u043E\u0434\u0443 \u0438 \u043C\u0435\u0441\u0442\u0443. \u041D\u043E\u0432\u0430\u044F \u043A\u0430\u0440\u0442\u0430 \u0438 \u043A\u0430\u0440\u0442\u0430 \u0438\u0437 \u0444\u0430\u0439\u043B\u0430 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0432 \u0431\u0430\u0437\u0443 \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C\u2026\xBB.</p></div>`;
       return `<div class="empty"><h2>${ok ? "\u0411\u0430\u0437\u0430 \u043A\u0430\u0440\u0442" : "\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u0435 \u0431\u0430\u0437\u0443 \u043A\u0430\u0440\u0442"}</h2>
@@ -7859,6 +8438,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       <div class="actions">${ok ? '<button class="btn primary" data-side="bopen">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0431\u0430\u0437\u0443</button><button class="btn" data-side="bconf">\u041D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C\u2026</button>' : '<button class="btn primary" data-side="bconf">\u041F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C \u0431\u0430\u0437\u0443\u2026</button>'}<button class="btn" data-side="file">\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043E\u0434\u0438\u043D \u0444\u0430\u0439\u043B\u2026</button></div>
       <ul><li>\u041A\u0430\u0436\u0434\u043E\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u2014 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043C\u043C\u0438\u0442 \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u0440\u0435\u0436\u043D\u0438\u0435 \u0432\u0435\u0440\u0441\u0438\u0438 \u043A\u0430\u0440\u0442\u044B \u043C\u043E\u0436\u043D\u043E \u0432\u0435\u0440\u043D\u0443\u0442\u044C \u043D\u0430 GitHub.</li>
       <li>\u041A\u0430\u0440\u0442\u0443, \u043E\u0442\u043A\u0440\u044B\u0442\u0443\u044E \u0438\u0437 \u043F\u0430\u043F\u043A\u0438 \u043D\u0430 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435, \u043C\u043E\u0436\u043D\u043E \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u0432 \u0431\u0430\u0437\u0443 \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0412 \u0431\u0430\u0437\u0443\xBB; \u0446\u0435\u043B\u0443\u044E \u043F\u0430\u043F\u043A\u0443 \u2014 \u043A\u043D\u043E\u043F\u043A\u043E\u0439 \xAB\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u0430\u0440\u0442\u044B \u0432 \u0431\u0430\u0437\u0443\u2026\xBB.</li>
+      <li>PDF \u0442\u043E\u0436\u0435 \u043C\u043E\u0436\u043D\u043E \u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0432 \u0431\u0430\u0437\u0435: \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF\xBB \u043D\u0430\u0434 \u0441\u043F\u0438\u0441\u043A\u043E\u043C. \u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u043A PDF \u043B\u0435\u0436\u0430\u0442 \u0440\u044F\u0434\u043E\u043C \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438.</li>
       <li>\u0421\u0430\u0439\u0442 \u043C\u043E\u0436\u043D\u043E \u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u043C: \u0431\u0435\u0437 \u0432\u0430\u0448\u0435\u0433\u043E \u0442\u043E\u043A\u0435\u043D\u0430 \u0432 \u043D\u0451\u043C \u043D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445.</li></ul></div>`;
     }
     const rem = S.remembered && !S.dirName ? `<button class="btn primary" data-side="resume">\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0441 \u043F\u0430\u043F\u043A\u043E\u0439 \xAB${esc(S.remembered.name)}\xBB</button>` : "";
@@ -8205,7 +8785,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
   function saveAs() {
     const c = S.ctx;
     if (!c) return;
-    if (isBase()) {
+    if (isBaseCharts()) {
       baseSaveDialog("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u043A\u2026");
       return;
     }
@@ -8275,7 +8855,12 @@ details.more[open] > summary { margin-bottom: .5rem; }
         saveSettings(S.ui);
       },
       hasFolder: () => isPdf() && (!!S.dirName || S.entries.length > 0),
-      openLoose: (e2) => openLoosePdf(e2)
+      openLoose: (e2) => openLoosePdf(e2),
+      emptyHtml: baseEmptyPdf,
+      readRemote: async (e2, onProgress) => readBlobRaw(await baseCfg(), e2.remote.sha, { size: e2.remote.size, onProgress, onWait: (w) => toast(`GitHub \u043F\u0440\u043E\u0441\u0438\u0442 \u043F\u043E\u0434\u043E\u0436\u0434\u0430\u0442\u044C ${w} \u0441\u2026`) }),
+      canToBase: () => isConfigured(S.base.cfg) && S.base.push !== false,
+      toBase: pdfToBase,
+      delFromBase: pdfFromBase
     });
     return reader;
   }
@@ -8283,17 +8868,19 @@ details.more[open] > summary { margin-bottom: .5rem; }
     const pdf = isPdf();
     $("#main").classList.toggle("pdfmode", pdf);
     document.querySelectorAll(".modes button").forEach((b) => {
-      b.classList.toggle("on", b.dataset.mode === S.mode);
-      b.setAttribute("aria-selected", String(b.dataset.mode === S.mode));
+      const on = b.dataset.mode === "base" ? isBase() : b.dataset.mode === S.mode;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-selected", String(on));
     });
-    $(".brand p").textContent = pdf ? "\u0427\u0442\u0435\u043D\u0438\u0435 PDF \u0438 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043D\u0430 \u0432\u0430\u0448\u0435\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435" : isBase() ? "\u0411\u0430\u0437\u0430 \u043A\u0430\u0440\u0442 \u0432 \u0432\u0430\u0448\u0435\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 GitHub" : "\u0420\u0430\u0441\u0447\u0451\u0442\u044B \u043F\u043E \u0444\u0430\u0439\u043B\u0430\u043C .jhd \u043D\u0430 \u0432\u0430\u0448\u0435\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435";
+    $(".brand p").textContent = isBasePdf() ? "\u0411\u0430\u0437\u0430 PDF \u0432 \u0432\u0430\u0448\u0435\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 GitHub" : pdf ? "\u0427\u0442\u0435\u043D\u0438\u0435 PDF \u0438 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043D\u0430 \u0432\u0430\u0448\u0435\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435" : isBase() ? "\u0411\u0430\u0437\u0430 \u043A\u0430\u0440\u0442 \u0432 \u0432\u0430\u0448\u0435\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 GitHub" : "\u0420\u0430\u0441\u0447\u0451\u0442\u044B \u043F\u043E \u0444\u0430\u0439\u043B\u0430\u043C .jhd \u043D\u0430 \u0432\u0430\u0448\u0435\u043C \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0435";
     $("#side").setAttribute("aria-label", pdf ? "\u041F\u0430\u043F\u043A\u0430 \u0441 PDF" : "\u0411\u0430\u0437\u0430 \u043A\u0430\u0440\u0442");
     $("#list").setAttribute("aria-label", pdf ? "PDF-\u0444\u0430\u0439\u043B\u044B" : "\u041A\u0430\u0440\u0442\u044B");
     const q = $("#q");
     q.value = S.query;
     q.placeholder = pdf ? "\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435, \u043F\u0430\u043F\u043A\u0430\u2026" : "\u0418\u043C\u044F, \u0433\u043E\u0434, \u043C\u0435\u0441\u0442\u043E\u2026";
+    if (isBasePdf() && S.sort === "date") S.sort = "name";
     const sort = $("#sort");
-    sort.innerHTML = '<option value="name">\u043F\u043E \u0438\u043C\u0435\u043D\u0438</option><option value="date">\u043F\u043E \u0434\u0430\u0442\u0435</option>' + (pdf ? '<option value="size">\u043F\u043E \u0440\u0430\u0437\u043C\u0435\u0440\u0443</option>' : "");
+    sort.innerHTML = '<option value="name">\u043F\u043E \u0438\u043C\u0435\u043D\u0438</option>' + (isBasePdf() ? "" : '<option value="date">\u043F\u043E \u0434\u0430\u0442\u0435</option>') + (pdf ? '<option value="size">\u043F\u043E \u0440\u0430\u0437\u043C\u0435\u0440\u0443</option>' : "");
     sort.value = S.sort;
     renderFolderBar();
     applyFilter();
@@ -8325,7 +8912,13 @@ details.more[open] > summary { margin-bottom: .5rem; }
   function wire() {
     document.querySelector(".modes").addEventListener("click", (e2) => {
       const b = e2.target.closest("[data-mode]");
-      if (b) setMode(b.dataset.mode);
+      if (!b) return;
+      let m = b.dataset.mode;
+      if (m === "base") {
+        if (isBase()) return;
+        m = S.ui.baseKind === "pdf" ? "basepdf" : "base";
+      }
+      setMode(m);
     });
     $("#q").addEventListener("input", (e2) => {
       S.query = e2.target.value;
@@ -8359,6 +8952,13 @@ details.more[open] > summary { margin-bottom: .5rem; }
       }
     });
     document.addEventListener("click", (e2) => {
+      const bk = e2.target.closest("[data-bkind]");
+      if (bk) {
+        S.ui = { ...S.ui, baseKind: bk.dataset.bkind === "pdf" ? "pdf" : "charts" };
+        saveSettings(S.ui);
+        setMode(bk.dataset.bkind === "pdf" ? "basepdf" : "base");
+        return;
+      }
       const side = e2.target.closest("[data-side]");
       if (side) {
         const k = side.dataset.side;
@@ -8368,7 +8968,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
         else if (k === "new") editDialog(true);
         else if (k === "file") openSingleFile();
         else if (k === "bconf") baseDialog();
-        else if (k === "bopen") openBase();
+        else if (k === "bopen") openBaseCurrent();
         else if (k === "bimport") importToBase();
         return;
       }
@@ -8432,6 +9032,10 @@ details.more[open] > summary { margin-bottom: .5rem; }
     $("#fimp").addEventListener("change", async (e2) => {
       const files = [...e2.target.files];
       e2.target.value = "";
+      if (isBasePdf()) {
+        await planImportPdf(await pdfItemsFromEntries(pdfEntriesFromFileList(files)));
+        return;
+      }
       await planImport(entriesFromFileList(files).map((x) => ({ path: x.path, read: async () => new Uint8Array(await x.file.arrayBuffer()) })));
     });
     $("#fone").addEventListener("change", async (e2) => {
@@ -8503,13 +9107,13 @@ details.more[open] > summary { margin-bottom: .5rem; }
       }
       S.libs.pdf = { ...emptyLib(), remembered: hp ? { name: hp.name, handle: hp } : null };
     }
-    setCache(kvGet, kvSet);
-    if (S.ui.mode === "pdf" || S.ui.mode === "base") await setMode(S.ui.mode);
+    setCache(kvGet, kvSet, kvDelete);
+    if (["pdf", "base", "basepdf"].includes(S.ui.mode)) await setMode(S.ui.mode);
     setTimeout(() => loadAtlas().catch((e2) => console.warn("atlas", e2.message)), 1500);
     window.__appReady = true;
   }
   start();
-  window.__app = { S, setCurrent, openEntry, applyFilter, parseJHD, useDirectory, saveCurrent, setMode, openPdfEntry, get reader() {
+  window.__app = { S, setCurrent, openEntry, applyFilter, parseJHD, useDirectory, saveCurrent, setMode, openPdfEntry, openBasePdf, get reader() {
     return reader;
   } };
 })();
