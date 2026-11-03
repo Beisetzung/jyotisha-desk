@@ -84,7 +84,7 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .92em; backgro
 #view > * + * { margin-top: 1rem; }
 
 /* ---- cards & tables */
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; min-width: 0; overflow-x: auto; }   /* too wide content scrolls inside its card instead of overlapping the next one */
 .card .note, .note { color: var(--mut); font-size: .85rem; margin: .6rem 0 0; max-width: 75ch; }
 .flag { margin: .6rem 0 0; padding: .45rem .7rem; background: var(--saffron-soft); border-left: 3px solid var(--saffron); border-radius: 4px; }
 .err { color: var(--bad); }
@@ -107,13 +107,15 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .92em; backgro
 .tag.db { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
 .tag.retro { background: var(--saffron-soft); color: var(--saffron); }
 .tag.stat { background: transparent; color: var(--saffron); box-shadow: inset 0 0 0 1px var(--saffron); }
-.kv { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .6rem 1.6rem; }
+.kv { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: .6rem 1.6rem; }
 .kv > div { min-width: 0; }
 .kv dt { color: var(--mut); font-size: .8rem; }
 .kv dd { margin: 0; }
-.kv.big { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.kv.big { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
 .info .name { font-size: 1.6rem; margin-bottom: .8rem; }
-.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; align-items: start; }
+/* at most three columns however wide the window is (zoomed out to 50-70% the page is 2500+ px wide: never squeeze the cards into 340 px strips) */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(380px, calc((100% - 2rem) / 3))), 1fr)); gap: 1rem; align-items: start; }
+.cols > * { min-width: 0; }
 .cols > * + * { margin-top: 0; }
 .cols.tr { grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); }
 
@@ -134,6 +136,9 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .92em; backgro
 .fig { margin: 0; }
 .fig figcaption { text-align: center; font-family: var(--serif); color: var(--mut); margin-top: .3rem; }
 svg.chart { display: block; max-width: 100%; height: auto; }
+/* labels are laid out in drawing units: let the browser scale the glyphs exactly instead of rounding every letter to whole pixels (that is what made them overlap in small, zoomed-out charts) */
+svg.chart text { text-rendering: geometricPrecision; }
+html.lowdpr body { text-rendering: geometricPrecision; }
 .chart .cell { fill: var(--panel); stroke: var(--text); stroke-width: 1.1; }
 .chart .cell.lagna { fill: var(--saffron-soft); }
 .chart .mid { fill: none; stroke: var(--text); stroke-width: 1.1; }
@@ -163,11 +168,15 @@ svg.chart { display: block; max-width: 100%; height: auto; }
 .path { margin: .8rem 0 0; display: flex; align-items: center; flex-wrap: wrap; gap: .3rem; }
 .chip { background: var(--saffron-soft); border: 1px solid var(--saffron); border-radius: 999px; padding: .1rem .7rem; }
 .sep { color: var(--mut); }
-.dhead, .drow { display: grid; grid-template-columns: minmax(230px, 1.7fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(110px, .8fr); gap: .5rem; padding: .32rem .4rem; align-items: center; }
+.dwrap { container-type: inline-size; }
+.dhead, .drow { display: grid; grid-template-columns: minmax(200px, 1.7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr); gap: .5rem; padding: .32rem .4rem; align-items: center; }
 .dhead { color: var(--mut); font-size: .8rem; font-weight: 600; border-bottom: 1px solid var(--line); margin-top: .8rem; }
 .drow { border-bottom: 1px solid var(--line); }
-.drow .dl { padding-left: calc(var(--d) * 20px); display: flex; align-items: center; gap: .4rem; min-width: 0; }
-.drow .lv { color: var(--mut); font-size: .76rem; min-width: 5.2em; }
+.drow .dl { padding-left: calc(var(--d) * 14px); display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.drow > span, .dhead > span { min-width: 0; }
+.drow .n { white-space: normal; overflow-wrap: anywhere; }
+.drow .lv { color: var(--mut); font-size: .76rem; min-width: 5.2em; flex: none; }
+.drow .dn { min-width: 0; overflow-wrap: anywhere; }
 .drow.now { background: var(--saffron-soft); box-shadow: inset 3px 0 0 var(--saffron); }
 .drow.l0 { font-weight: 600; }
 .tg { width: 1.3rem; height: 1.3rem; border: 0; background: none; cursor: pointer; position: relative; flex: none; }
@@ -183,7 +192,7 @@ svg.chart { display: block; max-width: 100%; height: auto; }
 .meter i { position: absolute; top: -.2rem; bottom: -.2rem; left: 50%; width: 1px; background: var(--text); opacity: .55; }
 .meter b { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 2.4em; text-align: right; }
 .yogas { list-style: none; margin: 0; padding: 0; }
-.yogas li { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 1rem; padding: .45rem 0; border-bottom: 1px solid var(--line); }
+.yogas li { display: grid; grid-template-columns: minmax(120px, 220px) minmax(0, 1fr); gap: 1rem; padding: .45rem 0; border-bottom: 1px solid var(--line); }
 .yogas li:last-child { border-bottom: 0; }
 .yogas li span { color: var(--mut); }
 
@@ -208,6 +217,9 @@ dialog ul { padding-left: 1.2rem; } dialog li { margin: .2rem 0; }
 #toast.on { opacity: 1; transform: none; }
 #toast.err { background: var(--bad); }
 
+@media (max-width: 1180px) { .cols.tr { grid-template-columns: minmax(0, 1fr); } }    /* the main area is narrower than ~850 px: the chart goes above the table */
+/* the dasha table in a narrow card (zoomed in a lot): the name takes the whole first line, the three dates share the second */
+@container (max-width: 560px) { .dhead { display: none; } .drow { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: .1rem; } .drow .dl { grid-column: 1 / -1; } .drow .n { font-size: .9em; } }
 @media (max-width: 860px) {
   #app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 38vh) minmax(0, 1fr); }
   .cols.tr { grid-template-columns: 1fr; }
@@ -394,6 +406,8 @@ details.more[open] > summary { margin-bottom: .5rem; }
 .fr mark { background: #ffe07a; color: #1b2236; border-radius: 2px; padding: 0 1px; }
 @media (max-width: 860px) { .pdfpanel { position: absolute; right: 0; top: 0; bottom: 0; z-index: 8; box-shadow: -6px 0 20px rgba(0, 0, 0, .3); } }
 @media print { #pdfapp { display: none !important; } }
+
+html.lowdpr .pg .textLayer { text-rendering: auto; }
 
 </style>
 </head>
@@ -3334,19 +3348,20 @@ details.more[open] > summary { margin-bottom: .5rem; }
 
   // src/app/svgcharts.js
   var SOUTH = [[11, 0, 1, 2], [10, -1, -1, 3], [9, -1, -1, 4], [8, 7, 6, 5]];
-  function stack(items, cx, cy, maxW, maxH) {
+  function stack(items, cx, cy, maxW, maxH, half = maxW / 2 + 4) {
     const n = items.length;
     if (!n) return "";
     const len = (it) => it.t.length + (it.k ? it.k.length + 1 : 0), maxLen = Math.max(...items.map(len));
     const cols = n > 6 || n > 4 && maxLen <= 7 ? 2 : 1, rows = Math.ceil(n / cols);
     const lh = Math.min(18, maxH / rows), fs = cols === 2 ? maxLen > 7 ? 8.5 : 10 : Math.max(9, Math.min(14, lh - 3));
     const colW = (maxW + (cols === 2 && maxLen > 7 ? 18 : 0)) / cols;
+    const room = cols === 1 ? 2 * (half - 2) : Math.min(colW - 2, 2 * (half - colW / 2 + 2));
     let out = "";
     items.forEach((it, i) => {
       const col = cols === 1 ? 0 : i % 2, row = cols === 1 ? i : Math.floor(i / 2);
       const x = cx + (cols === 1 ? 0 : (col - 0.5) * colW);
       const y = cy - (rows - 1) * lh / 2 + row * lh;
-      out += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="pl ${it.c || ""}" font-size="${fs}" text-anchor="middle" dominant-baseline="central">${esc(it.t)}${it.k ? `<tspan class="kar" dx="3">${esc(it.k)}</tspan>` : ""}</text>`;
+      out += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" class="pl ${it.c || ""}" font-size="${fs}" data-w="${room.toFixed(1)}" text-anchor="middle" dominant-baseline="central">${esc(it.t)}${it.k ? `<tspan class="kar" dx="3">${esc(it.k)}</tspan>` : ""}</text>`;
     });
     return out;
   }
@@ -3359,7 +3374,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       g += `<rect x="${x}" y="${y}" width="100" height="100" class="cell${s === lagnaSign ? " lagna" : ""}"/>`;
       g += `<text x="${x + 5}" y="${y + 11}" class="sg">${SIGN_ABBR[s]}</text>`;
       if (s === lagnaSign) g += `<path d="M${x} ${y}h26l-26 26z" class="asc-mark"/>`;
-      g += stack(cells[s], x + 50, y + 55, 92, 76);
+      g += stack(cells[s], x + 50, y + 55, 92, 76, 50);
     }
     g += `<rect x="100" y="100" width="200" height="200" class="mid"/>`;
     g += `<text x="200" y="${sub ? 190 : 200}" class="ttl" text-anchor="middle" dominant-baseline="central">${esc(title)}</text>`;
@@ -5071,7 +5086,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       list.forEach((p, i) => {
         const key = prefix + i, open = v.open.has(key), kids = depth < lastLevel;
         rows.push(`<div class="drow l${depth} ${nowSet.has(key) ? "now" : ""}" style="--d:${depth}">
-        <span class="dl">${kids ? `<button class="tg ${open ? "open" : ""}" data-act="dtoggle" data-key="${key}" aria-expanded="${open}" aria-label="\u0420\u0430\u0441\u043A\u0440\u044B\u0442\u044C"></button>` : '<span class="tg-sp"></span>'}<span class="lv">${esc(sys.levels[depth])}</span> ${dashaLabel(v.sys, sys, p.lord)}</span>
+        <span class="dl">${kids ? `<button class="tg ${open ? "open" : ""}" data-act="dtoggle" data-key="${key}" aria-expanded="${open}" aria-label="\u0420\u0430\u0441\u043A\u0440\u044B\u0442\u044C"></button>` : '<span class="tg-sp"></span>'}<span class="lv">${esc(sys.levels[depth])}</span><span class="dn">${dashaLabel(v.sys, sys, p.lord)}</span></span>
         <span class="n">${fmt(p.start, depth)}</span><span class="n">${fmt(p.end, depth)}</span><span class="n mut">${fmtDur(p.end - p.start, ctx.st.yearLen)}</span></div>`);
         if (open && kids) walk(sys.children(p), depth + 1, key + ".");
       });
@@ -5099,8 +5114,8 @@ details.more[open] > summary { margin-bottom: .5rem; }
     <p class="path">${chips || '<span class="mut">\u0414\u0430\u0442\u0430 \u0432\u043D\u0435 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D\u0430 \u0434\u0430\u0448</span>'}</p>${v.outOfRange ? '<p class="note">\u0421\u0435\u0433\u043E\u0434\u043D\u044F\u0448\u043D\u044F\u044F \u0434\u0430\u0442\u0430 \u0432\u043D\u0435 120-\u043B\u0435\u0442\u043D\u0435\u0433\u043E \u0446\u0438\u043A\u043B\u0430 \u044D\u0442\u043E\u0439 \u043A\u0430\u0440\u0442\u044B, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u043E\u043A\u0430\u0437\u0430\u043D \u043C\u043E\u043C\u0435\u043D\u0442 \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u044F.</p>' : ""}
     <p class="note">${v.sys === "chara" ? `\u0427\u0430\u0440\u0430-\u0434\u0430\u0448\u0430 \u2014 \u0437\u043D\u0430\u043A\u043E\u0432\u0430\u044F \u0441\u0438\u0441\u0442\u0435\u043C\u0430 \u0414\u0436\u0430\u0439\u043C\u0438\u043D\u0438, \u0432\u0441\u0435\u0433\u043E ${sys.total} \u043B\u0435\u0442.` : `\u0411\u0430\u043B\u0430\u043D\u0441 \u043F\u0435\u0440\u0432\u043E\u0439 \u043C\u0430\u0445\u0430\u0434\u0430\u0448\u0438 \u043F\u0440\u0438 \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u0438: ${sys.balanceYears.toFixed(3)} \u0433.`} \u0413\u043E\u0434 \u0434\u0430\u0448 = ${ctx.st.yearLen} \u0434\u043D. \u0414\u0430\u0442\u044B \u0432 \u0447\u0430\u0441\u043E\u0432\u043E\u043C \u043F\u043E\u044F\u0441\u0435 \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u044F (${fmtTz(tz)}).
       \u041D\u0435 \u0440\u0435\u0430\u043B\u0438\u0437\u043E\u0432\u0430\u043D\u044B: \u041D\u0430\u0440\u0430\u044F\u043D\u0430, \u041A\u0430\u043B\u0430\u0447\u0430\u043A\u0440\u0430, \u0410\u0448\u0442\u043E\u0442\u0442\u0430\u0440\u0438, \u0414\u0440\u0438\u0433 \u0438 \u043F\u0440\u043E\u0447\u0438\u0435 \u0434\u0430\u0448\u0438.</p>${v.sys === "chara" ? charaNote(ctx, sys) : ""}
-    <div class="dhead"><span>\u041F\u0435\u0440\u0438\u043E\u0434</span><span>\u041D\u0430\u0447\u0430\u043B\u043E</span><span>\u041A\u043E\u043D\u0435\u0446</span><span>\u0414\u043B\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C</span></div>
-    <div class="dtree">${rows.join("")}</div>
+    <div class="dwrap"><div class="dhead"><span>\u041F\u0435\u0440\u0438\u043E\u0434</span><span>\u041D\u0430\u0447\u0430\u043B\u043E</span><span>\u041A\u043E\u043D\u0435\u0446</span><span>\u0414\u043B\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C</span></div>
+    <div class="dtree">${rows.join("")}</div></div>
   </section>`;
   }
   function viewStrength(ctx) {
@@ -5269,8 +5284,9 @@ details.more[open] > summary { margin-bottom: .5rem; }
   <li>\u0411\u0430\u0437\u0430 (\u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF | \u0411\u0430\u0437\u0430\xBB): \u0432\u0430\u0448\u0438 \u043A\u0430\u0440\u0442\u044B \u0432 \u043F\u0440\u0438\u0432\u0430\u0442\u043D\u043E\u043C \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0438 GitHub \u2014 \u0441\u043F\u0438\u0441\u043E\u043A \u0441 \u043F\u043E\u0438\u0441\u043A\u043E\u043C \u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0435\u043C, \xAB\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C\xBB \u0438 \xAB\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u043A\u0430\u043A\u2026\xBB \u043F\u0440\u044F\u043C\u043E \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 (\u043A\u0430\u0436\u0434\u044B\u0439 \u0440\u0430\u0437 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043C\u043C\u0438\u0442, \u0438\u0441\u0442\u043E\u0440\u0438\u044F \u0432\u0435\u0440\u0441\u0438\u0439 \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F \u043D\u0430 GitHub), \xAB\u0412 \u0431\u0430\u0437\u0443\xBB \u0434\u043B\u044F \u043A\u0430\u0440\u0442\u044B \u0441 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0430, \xAB\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u0437 \u0431\u0430\u0437\u044B\xBB, \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0446\u0435\u043B\u043E\u0439 \u043F\u0430\u043F\u043A\u0438 \u0441 \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u043E\u043C \u0443\u0436\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043D\u044B\u0445 \u043A\u0430\u0440\u0442. \u0414\u043E\u0441\u0442\u0443\u043F \u2014 \u043B\u0438\u0447\u043D\u044B\u0439 \u0442\u043E\u043A\u0435\u043D GitHub \u043D\u0430 \u043E\u0434\u0438\u043D \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 (\u043F\u0440\u0430\u0432\u043E Contents: Read and write); \u043E\u043D \u0445\u0440\u0430\u043D\u0438\u0442\u0441\u044F \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C \u0442\u0435\u043A\u0441\u0442\u043E\u043C \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430 api.github.com. \u0421\u0430\u0439\u0442 \u0441 \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u043E\u0439 \u043F\u0440\u0438 \u044D\u0442\u043E\u043C \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043F\u0443\u0431\u043B\u0438\u0447\u043D\u044B\u043C: \u0431\u0435\u0437 \u0442\u043E\u043A\u0435\u043D\u0430 \u0432 \u043D\u0451\u043C \u043D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445.</li>
   <li>\u0411\u0430\u0437\u0430 PDF (\u0432 \xAB\u0411\u0430\u0437\u0435\xBB \u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF\xBB): \u0442\u0435 \u0436\u0435 \u0444\u0430\u0439\u043B\u044B \u0438 \u0447\u0438\u0442\u0430\u043B\u043A\u0430, \u043D\u043E PDF \u043B\u0435\u0436\u0430\u0442 \u0432 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u043F\u0430\u043F\u043A\u0435 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u044F (\u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E <code>pdf</code>), \u0430 \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043A \u043A\u0430\u0436\u0434\u043E\u043C\u0443 \u2014 \u0440\u044F\u0434\u043E\u043C, \u0432 \u0444\u0430\u0439\u043B\u0435 <code>\u0438\u043C\u044F.pdf.notes.json</code>. PDF \u0441\u043A\u0430\u0447\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u0446\u0435\u043B\u0438\u043A\u043E\u043C \u043F\u0440\u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u0438 (\u0441 \u0438\u043D\u0434\u0438\u043A\u0430\u0442\u043E\u0440\u043E\u043C) \u0438 \u0437\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u0435\u0442\u0441\u044F \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 (\u0434\u043E ~400 \u041C\u0411, \u0434\u043E\u043B\u044C\u0448\u0435 \u0432\u0441\u0435\u0433\u043E \u043D\u0435 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0432\u0448\u0438\u0435\u0441\u044F \u0443\u0434\u0430\u043B\u044F\u044E\u0442\u0441\u044F \u043F\u0435\u0440\u0432\u044B\u043C\u0438), \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0435\u0442\u0441\u044F \u0441\u0440\u0430\u0437\u0443. \u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0432 \u0440\u0435\u043F\u043E\u0437\u0438\u0442\u043E\u0440\u0438\u0439 \u0447\u0435\u0440\u0435\u0437 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0441\u0435\u043A\u0443\u043D\u0434 \u043F\u043E\u0441\u043B\u0435 \u043F\u0440\u0430\u0432\u043A\u0438 \u043E\u0434\u043D\u0438\u043C \u043A\u043E\u043C\u043C\u0438\u0442\u043E\u043C; \u0435\u0441\u043B\u0438 \u0444\u0430\u0439\u043B \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u0438 \u043D\u0430 \u0434\u0440\u0443\u0433\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435, \u0437\u0430\u043C\u0435\u0442\u043A\u0438 \u043E\u0431\u044A\u0435\u0434\u0438\u043D\u044F\u044E\u0442\u0441\u044F (\u043F\u043E \u043D\u043E\u043C\u0435\u0440\u0443 \u0437\u0430\u043C\u0435\u0442\u043A\u0438, \u043F\u043E\u0431\u0435\u0436\u0434\u0430\u0435\u0442 \u0431\u043E\u043B\u0435\u0435 \u043D\u043E\u0432\u0430\u044F), \u043D\u043E \u0437\u0430\u043C\u0435\u0442\u043A\u0430, \u0443\u0434\u0430\u043B\u0451\u043D\u043D\u0430\u044F \u043D\u0430 \u043E\u0434\u043D\u043E\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435, \u043C\u043E\u0436\u0435\u0442 \u0432\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u0441 \u0434\u0440\u0443\u0433\u043E\u0433\u043E. \u041A\u043D\u043E\u043F\u043A\u0438 \u0447\u0438\u0442\u0430\u043B\u043A\u0438 \xAB\u0412 \u0431\u0430\u0437\u0443\xBB (PDF \u0441 \u043A\u043E\u043C\u043F\u044C\u044E\u0442\u0435\u0440\u0430, \u0432\u043C\u0435\u0441\u0442\u0435 \u0441 \u0437\u0430\u043C\u0435\u0442\u043A\u0430\u043C\u0438) \u0438 \xAB\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0438\u0437 \u0431\u0430\u0437\u044B\xBB, \u0430 \u0432 \u0431\u043E\u043A\u043E\u0432\u043E\u0439 \u043F\u0430\u043D\u0435\u043B\u0438 \xAB\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C PDF \u0432 \u0431\u0430\u0437\u0443\u2026\xBB \u0434\u043B\u044F \u0446\u0435\u043B\u043E\u0439 \u043F\u0430\u043F\u043A\u0438 (\u043E\u0434\u0438\u043D\u0430\u043A\u043E\u0432\u044B\u0435 \u0444\u0430\u0439\u043B\u044B \u043F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u044E\u0442\u0441\u044F, \u0437\u0430\u043C\u0435\u0442\u043A\u0438, \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u0432 \u0431\u0430\u0437\u0435 \u0443\u0436\u0435 \u0435\u0441\u0442\u044C, \u043D\u0435 \u0437\u0430\u0442\u0438\u0440\u0430\u044E\u0442\u0441\u044F).</li>
   <li>\u0427\u0438\u0442\u0430\u043B\u043A\u0430 PDF (\u043F\u0435\u0440\u0435\u043A\u043B\u044E\u0447\u0430\u0442\u0435\u043B\u044C \xAB\u041A\u0430\u0440\u0442\u044B | PDF\xBB \u0441\u043B\u0435\u0432\u0430): \u0441\u0432\u043E\u044F \u043F\u0430\u043F\u043A\u0430 \u0441 \u0432\u043B\u043E\u0436\u0435\u043D\u043D\u044B\u043C\u0438 \u043F\u0430\u043F\u043A\u0430\u043C\u0438, \u043F\u043E\u0438\u0441\u043A \u0438 \u0441\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u043A\u0430, \u0437\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435 \u043F\u0430\u043F\u043A\u0438 \u0438 \u043C\u0435\u0441\u0442\u0430 \u0432 \u043A\u0430\u0436\u0434\u043E\u043C \u0444\u0430\u0439\u043B\u0435; \u043C\u0430\u0441\u0448\u0442\u0430\u0431 10\u2013800 % (Ctrl + \u043A\u043E\u043B\u0435\u0441\u043E, \u0449\u0438\u043F\u043E\u043A, \xAB\u041F\u043E \u0448\u0438\u0440\u0438\u043D\u0435\xBB, \xAB\u0426\u0435\u043B\u0438\u043A\u043E\u043C\xBB), \u043E\u0433\u043B\u0430\u0432\u043B\u0435\u043D\u0438\u0435, \u043F\u043E\u0438\u0441\u043A \u043F\u043E \u0442\u0435\u043A\u0441\u0442\u0443, \u0441\u0441\u044B\u043B\u043A\u0438 \u0432\u043D\u0443\u0442\u0440\u0438 \u0434\u043E\u043A\u0443\u043C\u0435\u043D\u0442\u0430, \u043D\u043E\u0447\u043D\u043E\u0439 \u0440\u0435\u0436\u0438\u043C, \u0432\u0432\u043E\u0434 \u043F\u0430\u0440\u043E\u043B\u044F.</li>
-  <li>\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0432 \u0447\u0438\u0442\u0430\u043B\u043A\u0435: \u0432\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u2014 \u043F\u043E\u0434\u0441\u0432\u0435\u0442\u043A\u0430 \u0438\u043B\u0438 \u043F\u043E\u0434\u0447\u0451\u0440\u043A\u0438\u0432\u0430\u043D\u0438\u0435 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u043C; \u043C\u0435\u0442\u043A\u0430 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u043C \u0432 \u043B\u044E\u0431\u043E\u043C \u043C\u0435\u0441\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043A\u043D\u043E\u043F\u043A\u0430 \xAB\u0417\u0430\u043C\u0435\u0442\u043A\u0430\xBB); \u0441\u043F\u0438\u0441\u043E\u043A \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0441 \u0444\u0438\u043B\u044C\u0442\u0440\u043E\u043C, \u044D\u043A\u0441\u043F\u043E\u0440\u0442 \u0432 Markdown \u0438 JSON, \u0438\u043C\u043F\u043E\u0440\u0442 JSON.</li></ul>
-  <h3>\u0427\u0435\u0433\u043E \u043D\u0435\u0442</h3>
+  <li>\u0417\u0430\u043C\u0435\u0442\u043A\u0438 \u0432 \u0447\u0438\u0442\u0430\u043B\u043A\u0435: \u0432\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u2014 \u043F\u043E\u0434\u0441\u0432\u0435\u0442\u043A\u0430 \u0438\u043B\u0438 \u043F\u043E\u0434\u0447\u0451\u0440\u043A\u0438\u0432\u0430\u043D\u0438\u0435 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u043C; \u043C\u0435\u0442\u043A\u0430 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u043C \u0432 \u043B\u044E\u0431\u043E\u043C \u043C\u0435\u0441\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B (\u043A\u043D\u043E\u043F\u043A\u0430 \xAB\u0417\u0430\u043C\u0435\u0442\u043A\u0430\xBB); \u0441\u043F\u0438\u0441\u043E\u043A \u0437\u0430\u043C\u0435\u0442\u043E\u043A \u0441 \u0444\u0438\u043B\u044C\u0442\u0440\u043E\u043C, \u044D\u043A\u0441\u043F\u043E\u0440\u0442 \u0432 Markdown \u0438 JSON, \u0438\u043C\u043F\u043E\u0440\u0442 JSON.</li>
+  <li>\u041C\u0430\u0441\u0448\u0442\u0430\u0431 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: \u0432\u0451\u0440\u0441\u0442\u043A\u0430 \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u0430 \u043F\u0440\u0438 \u043C\u0430\u0441\u0448\u0442\u0430\u0431\u0435 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u043E\u0442 50% \u0434\u043E 250% \u0438 \u0432 \u043E\u043A\u043D\u0430\u0445 \u043E\u0442 480 \u0434\u043E 3200 px \u0448\u0438\u0440\u0438\u043D\u043E\u0439 \u2014 \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0448\u0438\u0440\u043E\u043A\u0430\u044F \u0442\u0430\u0431\u043B\u0438\u0446\u0430 \u043F\u0440\u043E\u043A\u0440\u0443\u0447\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u0432\u043E\u0435\u0439 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438, \u0430 \u043D\u0435 \u043D\u0430\u043B\u0435\u0437\u0430\u0435\u0442 \u043D\u0430 \u0441\u043E\u0441\u0435\u0434\u043D\u044E\u044E; \u043F\u043E\u0434\u043F\u0438\u0441\u0438 \u0432 \u043A\u0430\u0440\u0442\u0430\u0445 \u0441\u0430\u043C\u0438 \u0443\u0436\u0438\u043C\u0430\u044E\u0442\u0441\u044F, \u0435\u0441\u043B\u0438 \u043D\u0435 \u043F\u043E\u043C\u0435\u0449\u0430\u044E\u0442\u0441\u044F. \u0415\u0441\u043B\u0438 \u0433\u0434\u0435-\u0442\u043E \u0432\u0441\u0451 \u0436\u0435 \u043D\u0430\u043B\u0435\u0437\u0430\u0435\u0442, \u043F\u0440\u0438\u0448\u043B\u0438\u0442\u0435 \u0441\u043D\u0438\u043C\u043E\u043A \u044D\u043A\u0440\u0430\u043D\u0430 \u0438 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0432\u043A\u043B\u0430\u0434\u043A\u0438.</li></ul>
+    <h3>\u0427\u0435\u0433\u043E \u043D\u0435\u0442</h3>
   <ul><li>\u042D\u0442\u043E \u043D\u0435 \u043A\u043E\u043F\u0438\u044F Jagannatha Hora: \u043D\u0435\u0442 \u041D\u0430\u0440\u0430\u044F\u043D\u0430/\u041A\u0430\u043B\u0430\u0447\u0430\u043A\u0440\u0430/\u0410\u0448\u0442\u043E\u0442\u0442\u0430\u0440\u0438-\u0434\u0430\u0448, \u0411\u0445\u0430\u0432\u0430-\u0431\u0430\u043B\u044B, \u042E\u0434\u0434\u0445\u0430-\u0431\u0430\u043B\u044B, \u0421\u0430\u0445\u0430\u043C\u043E\u0432, \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044F \u0432\u043B\u0430\u0434\u044B\u043A\u0438 \u0433\u043E\u0434\u0430 \u043F\u043E \u041F\u0430\u043D\u0447\u0430-\u0432\u0430\u0440\u0433\u0438\u044F-\u0431\u0430\u043B\u0435, \u043F\u0440\u043E\u0447\u0438\u0445 \u0442\u0430\u0434\u0436\u0438\u043A\u0430-\u0439\u043E\u0433, \u043F\u0440\u0430\u0448\u043D\u044B, \u043C\u0443\u0445\u0443\u0440\u0442\u044B, \u043F\u043E\u0434\u0431\u043E\u0440\u0430 \u043F\u0430\u0440, \u043F\u0435\u0447\u0430\u0442\u0438.</li>
   <li>\u0413\u0440\u0430\u0434\u0443\u0441 \u043F\u043B\u0430\u043D\u0435\u0442\u044B \u0432 \u0432\u0430\u0440\u0433\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044F \u043F\u043E \u043C\u043E\u0435\u043C\u0443 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u044E: \u043F\u043E\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0432\u043D\u0443\u0442\u0440\u0438 \u0434\u043E\u043B\u0438 \u0437\u043D\u0430\u043A\u0430, \u0440\u0430\u0441\u0442\u044F\u043D\u0443\u0442\u043E\u0435 \u043D\u0430 \u0432\u0435\u0441\u044C \u0437\u043D\u0430\u043A (\u0432 D30 \u0434\u043E\u043B\u0438 \u043D\u0435\u0440\u0430\u0432\u043D\u044B\u0435). \u0421 Jagannatha Hora \u044D\u0442\u0438 \u0447\u0438\u0441\u043B\u0430 \u043D\u0435 \u0441\u0432\u0435\u0440\u044F\u043B\u0438\u0441\u044C \u2014 \u0432 \u0441\u0430\u043C\u043E\u0439 JHora \u043E\u043D\u0438 \u043C\u043E\u0433\u0443\u0442 \u043E\u0442\u043B\u0438\u0447\u0430\u0442\u044C\u0441\u044F. \u0421\u043F\u0438\u0441\u043E\u043A \u043D\u0430\u0442\u0443\u0440\u0430\u043B\u044C\u043D\u044B\u0445 \u043A\u0430\u0440\u0430\u043A \u2014 \u043A\u0440\u0430\u0442\u043A\u0430\u044F \u043E\u0431\u0449\u0430\u044F \u0441\u0432\u043E\u0434\u043A\u0430, \u0432 \u0440\u0430\u0437\u043D\u044B\u0445 \u0448\u043A\u043E\u043B\u0430\u0445 \u043E\u043D \u0440\u0430\u0437\u043B\u0438\u0447\u0430\u0435\u0442\u0441\u044F.</li>
   <li>\xAB\u0421\u0442\u0430\u0446\u0438\u043E\u043D\u0430\u0440\u043D\u0430\xBB \u2014 \u0443\u0441\u043B\u043E\u0432\u043D\u043E\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u043E \u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u044B (\u0441\u043A\u043E\u0440\u043E\u0441\u0442\u044C \u043C\u0435\u043D\u044C\u0448\u0435 10 % \u0441\u0440\u0435\u0434\u043D\u0435\u0439), \u0430 \u043D\u0435 \u043E\u0431\u0449\u0435\u043F\u0440\u0438\u043D\u044F\u0442\u044B\u0439 \u0441\u0442\u0430\u043D\u0434\u0430\u0440\u0442; \u0442\u043E\u0447\u043D\u044B\u0435 \u043C\u043E\u043C\u0435\u043D\u0442\u044B \u0441\u0442\u043E\u044F\u043D\u043E\u043A \u0434\u0430\u043D\u044B \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E. \u041F\u0435\u0440\u0438\u043E\u0434\u044B \u0432 \u0437\u043D\u0430\u043A\u0430\u0445 \u0438 \u043D\u0430\u043A\u0448\u0430\u0442\u0440\u0430\u0445 \u0441\u0447\u0438\u0442\u0430\u044E\u0442\u0441\u044F \u043F\u043E \u0441\u0438\u0434\u0435\u0440\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u0434\u043E\u043B\u0433\u043E\u0442\u0435 \u0441 \u0430\u044F\u043D\u0430\u043C\u0448\u0435\u0439 \u0438\u0437 \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A, \u0430 \u0443 \u0440\u0435\u0442\u0440\u043E\u0433\u0440\u0430\u0434\u043D\u043E\u0439 \u043F\u043B\u0430\u043D\u0435\u0442\u044B \u043E\u0434\u0438\u043D \u0438 \u0442\u043E\u0442 \u0436\u0435 \u0437\u043D\u0430\u043A \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u0445 \u043F\u0435\u0440\u0438\u043E\u0434\u043E\u0432.</li>
@@ -7473,6 +7489,52 @@ details.more[open] > summary { margin-bottom: .5rem; }
     };
   }
 
+  // src/app/fit.js
+  function wrapTables(root) {
+    for (const t of root.querySelectorAll("table.tbl")) {
+      if (t.closest(".scroll")) continue;
+      const w = document.createElement("div");
+      w.className = "scroll";
+      t.parentNode.insertBefore(w, t);
+      w.appendChild(t);
+      if (t.style.marginTop) {
+        w.style.marginTop = t.style.marginTop;
+        t.style.marginTop = "";
+      }
+    }
+  }
+  var MIN_FS = 5.5;
+  function fitCharts(root) {
+    let n = 0;
+    for (const svg of root.querySelectorAll("svg.chart")) {
+      if (!svg.getClientRects().length) continue;
+      for (const t of svg.querySelectorAll("text[data-w]")) {
+        const w = +t.getAttribute("data-w");
+        let len;
+        try {
+          len = t.getComputedTextLength();
+        } catch {
+          continue;
+        }
+        if (!(len > w + 0.3) || !(w > 0)) continue;
+        const fs = parseFloat(t.getAttribute("font-size")) || 10, want = fs * (w / len);
+        if (want >= MIN_FS) t.setAttribute("font-size", (Math.floor(want * 10) / 10).toFixed(1));
+        else {
+          t.setAttribute("font-size", MIN_FS);
+          t.setAttribute("textLength", w.toFixed(1));
+          t.setAttribute("lengthAdjust", "spacingAndGlyphs");
+        }
+        n++;
+      }
+    }
+    return n;
+  }
+  function watchZoom() {
+    const apply = () => document.documentElement.classList.toggle("lowdpr", (window.devicePixelRatio || 1) < 0.999);
+    apply();
+    window.addEventListener("resize", apply);
+  }
+
   // src/app/main.js
   var $ = (s, r = document) => r.querySelector(s);
   var S = { ui: loadSettings(), entries: [], filtered: [], dirHandle: null, dirName: "", readOnly: false, query: "", sort: "name", ctx: null, tab: "chart", gen: 0, remembered: null, selPath: null, mode: "charts", libs: {}, scanning: false, base: { cfg: loadConfig(), loaded: false, loadedPdf: false, loading: false, push: null, throttle: 800 } };
@@ -8463,6 +8525,12 @@ details.more[open] > summary { margin-bottom: .5rem; }
       console.error(e2);
       view.innerHTML = `<section class="card"><h3>\u041E\u0448\u0438\u0431\u043A\u0430 \u0440\u0430\u0441\u0447\u0451\u0442\u0430</h3><p class="err">${esc(e2.message)}</p><p class="note">\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u043A\u0430\u0440\u0442\u044B (\u0434\u0430\u0442\u0430, \u0432\u0440\u0435\u043C\u044F, \u043A\u043E\u043E\u0440\u0434\u0438\u043D\u0430\u0442\u044B, \u043F\u043E\u044F\u0441) \u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438.</p></section>`;
     }
+    try {
+      wrapTables(view);
+      fitCharts(view);
+    } catch (e2) {
+      console.error(e2);
+    }
     view.scrollTop = sc;
   }
   function renderAll() {
@@ -9108,6 +9176,7 @@ details.more[open] > summary { margin-bottom: .5rem; }
       S.libs.pdf = { ...emptyLib(), remembered: hp ? { name: hp.name, handle: hp } : null };
     }
     setCache(kvGet, kvSet, kvDelete);
+    watchZoom();
     if (["pdf", "base", "basepdf"].includes(S.ui.mode)) await setMode(S.ui.mode);
     setTimeout(() => loadAtlas().catch((e2) => console.warn("atlas", e2.message)), 1500);
     window.__appReady = true;
